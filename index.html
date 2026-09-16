@@ -1,0 +1,6961 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <!--
+    ============================================================
+    このファイルについて
+    ============================================================
+
+    この1枚のHTMLファイルだけで動く、シフト管理アプリの試作品です。
+
+    HTML  = 画面の「部品」を作る
+    CSS   = 色・大きさ・配置など「見た目」を作る
+    JavaScript = ボタンを押した時の処理など「動き」を作る
+
+    という3つの役割があります。
+
+    このファイルでは、
+    <style> ～ </style> の中が CSS
+    <script> ～ </script> の中が JavaScript
+    それ以外の <div> や <button> などが HTML です。
+
+    ※ 現在は localStorage という「このブラウザの中だけの保存」を使っています。
+       本当に複数のスマホで共有する段階になったら Firebase に置き換えます。
+  -->
+
+  <!-- 日本語の文字化けを防ぐ設定 -->
+  <meta charset="UTF-8">
+
+  <!-- スマホで見た時、画面幅を正しく合わせる設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SafariやChromeのタブに表示される名前 -->
+  <title>シフト管理</title>
+
+  <style>
+    /*
+      ============================================================
+      ここから CSS（見た目の設定）
+      ============================================================
+
+      CSSの基本形は、
+
+      .クラス名 {
+        設定項目: 値;
+      }
+
+      です。
+
+      例：
+      .red {
+        color: red;
+      }
+
+      とすると、class="red" をつけた文字が赤くなります。
+    */
+
+    /* すべての要素で、横幅計算を分かりやすくする設定 */
+    * {
+      box-sizing: border-box;
+    }
+
+    /* ページ全体の見た目 */
+    body {
+      margin: 0; /* ブラウザ標準の外側余白を消す */
+
+      /* Mac / iPhoneで読みやすいフォントを優先して使う */
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Helvetica Neue",
+        Arial,
+        sans-serif;
+
+      background: #f4f6f8; /* ページ背景：薄いグレー */
+      color: #333;         /* 基本文字色 */
+    }
+
+    /* buttonとinputに本文と同じフォントを使わせる */
+    button,
+    input {
+      font: inherit;
+    }
+
+    /* PCでボタンにマウスを乗せた時、手の形にする */
+    button {
+      cursor: pointer;
+    }
+
+    /*
+      「ページ」は最初は全部隠します。
+      JavaScriptで active クラスを付けたページだけ表示します。
+    */
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /*
+      ------------------------------------------------------------
+      共通の白いカード
+      ------------------------------------------------------------
+    */
+    .card,
+    .admin-card,
+    .gantt-day {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.05);
+    }
+
+    .card {
+      max-width: 440px;
+      margin: 14px auto;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin-top: 0;
+    }
+
+    /* 補足説明などに使う小さいグレー文字 */
+    .muted {
+      color: #777;
+      font-size: 12px;
+    }
+
+    /* 入力欄 */
+    input,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 9px;
+      margin-top: 6px;
+      background: white;
+      font: inherit;
+    }
+
+    /*
+      textarea は複数行入力できる欄です。
+      今回は「要望・伝えたいこと」に使います。
+    */
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-top: 14px;
+    }
+
+    /*
+      ------------------------------------------------------------
+      共通ボタン
+      ------------------------------------------------------------
+    */
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      margin-top: 12px;
+      font-weight: bold;
+    }
+
+    .btn-primary {
+      background: #2699c7;
+      color: white;
+    }
+
+    .btn-dark {
+      background: #222;
+      color: white;
+    }
+
+    .btn-light {
+      background: #eee;
+      color: #444;
+    }
+
+    .btn-danger {
+      background: #ffe7e7;
+      color: #b42318;
+      border: 1px solid #ffc8c8;
+    }
+
+    /*
+      ------------------------------------------------------------
+      上部ヘッダー
+      ------------------------------------------------------------
+    */
+    .topbar {
+      position: sticky; /* スクロールしても上に残る */
+      top: 0;
+      background: white;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      z-index: 10;
+    }
+
+    .row {
+      display: flex; /* 横並び */
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .month-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .circle {
+      border: none;
+      background: #eee;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+    }
+
+    .month-title {
+      min-width: 150px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .smallbtn {
+      border: none;
+      background: #eee;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    /*
+      ------------------------------------------------------------
+      スタッフ側：月間一覧
+      ------------------------------------------------------------
+    */
+    .shift-grid {
+      padding: 8px;
+      display: grid;
+
+      /*
+        横に2列並べる。
+        1fr 1fr は「左右同じ幅」という意味。
+      */
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .shift-card {
+      display: flex;
+      min-height: 112px;
+    }
+
+    /* 左側の日付 */
+    .date-box {
+      width: 54px;
+      flex-shrink: 0;
+      background: #36a0cd;
+      color: white;
+      border-radius: 10px 0 0 10px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    /* 日曜日だけ赤 */
+    .date-box.sun {
+      background: #ef476f;
+    }
+
+    .date-num {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* 右側のシフト情報 */
+    .shift-info {
+      flex: 1;
+      border: 1px solid #aaa;
+      border-left: none;
+      background: white;
+      border-radius: 0 10px 10px 0;
+      padding: 6px;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    /*
+      色の意味
+      青   = 固定
+      緑   = 希望
+      オレンジ = 確定
+      赤   = 希望休
+      紫   = 管理者が希望を変更
+    */
+    .fixed-text {
+      color: #4e79a7;
+      font-weight: bold;
+    }
+
+    .hope-text {
+      color: #3d8b40;
+      font-weight: bold;
+    }
+
+    .confirmed-text {
+      color: #d47a00;
+      font-weight: bold;
+    }
+
+    .off-text {
+      color: #c53e45;
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    .admin-edited {
+      color: #7c3aed;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    /*
+      ------------------------------------------------------------
+      モーダル
+      ------------------------------------------------------------
+
+      画面下から出てくる編集画面です。
+    */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+
+      /* 背景を半透明の黒にする */
+      background: rgba(0,0,0,.45);
+
+      z-index: 50;
+      align-items: flex-end;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 18px 18px 30px;
+    }
+
+    .section {
+      background: #f7f7f7;
+      border-radius: 11px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .time-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 8px;
+    }
+
+    .time-row input {
+      margin: 0;
+    }
+
+    .type-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .type-buttons button {
+      flex: 1;
+      border: 1px solid #bbb;
+      background: white;
+      border-radius: 9px;
+      padding: 11px;
+    }
+
+    /* 選ばれている方を黒くする */
+    .type-buttons button.active {
+      background: #222;
+      color: white;
+    }
+
+    /*
+      ------------------------------------------------------------
+      管理者画面
+      ------------------------------------------------------------
+    */
+    .admin-wrap {
+      max-width: 1200px;
+      margin: auto;
+      padding: 12px;
+    }
+
+    .admin-card {
+      margin-bottom: 12px;
+    }
+
+    /* スタッフ別 / 日付・週別 */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tab {
+      flex: 1;
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 9px;
+      padding: 10px;
+      font-weight: bold;
+    }
+
+    .tab.active {
+      background: #222;
+      color: white;
+    }
+
+    /* 1日表示 / 1週間表示 */
+    .view-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .view-toggle button {
+      flex: 1;
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 9px;
+      padding: 9px;
+    }
+
+    .view-toggle button.active {
+      background: #2699c7;
+      color: white;
+      border-color: #2699c7;
+    }
+
+    /* 提出済み / 未提出 */
+    .badge {
+      display: inline-block;
+      border-radius: 18px;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .badge.ok {
+      background: #e6f6ed;
+      color: #18864b;
+    }
+
+    .badge.no {
+      background: #eee;
+      color: #777;
+    }
+
+    /* スタッフ管理ボタンを横並びにする */
+    .staff-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .staff-actions button {
+      border: none;
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+
+    .edit-button {
+      background: #eaf4ff;
+      color: #2563eb;
+    }
+
+    .reset-button {
+      background: #fff3db;
+      color: #a15c00;
+    }
+
+    .delete-button {
+      background: #ffe7e7;
+      color: #b42318;
+    }
+
+    /*
+      ------------------------------------------------------------
+      色の説明
+      ------------------------------------------------------------
+    */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      margin: 8px 0 12px;
+    }
+
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .swatch-fixed {
+      background: #4e79a7;
+    }
+
+    .swatch-hope {
+      background: #59a14f;
+    }
+
+    .swatch-confirmed {
+      background: #f28e2b;
+    }
+
+    .swatch-off {
+      background: #e15759;
+    }
+
+
+    /* 固定シフトの変更履歴を見やすく表示 */
+    .fixed-history {
+      margin-top: 8px;
+      padding: 10px;
+      background: #eef6ff;
+      border-radius: 9px;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .fixed-history strong {
+      color: #315d86;
+    }
+
+    /* ガントチャート左側の小さい操作ボタン */
+    .mini-action-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 5px;
+    }
+
+    .mini-action-row button {
+      border: none;
+      border-radius: 6px;
+      padding: 5px 7px;
+      font-size: 10px;
+    }
+
+    .mini-hope {
+      background: #eeeeee;
+      color: #333;
+    }
+
+    .mini-fixed {
+      background: #eaf4ff;
+      color: #2563eb;
+    }
+
+    /*
+      ------------------------------------------------------------
+      ガントチャート
+      ------------------------------------------------------------
+    */
+    .gantt-day {
+      margin-bottom: 14px;
+    }
+
+    .day-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    /* 横に長いので横スクロール可能にする */
+    .gantt-scroll {
+      overflow-x: auto;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+    }
+
+    /*
+      左の名前欄 150px
+      右の時間軸 800px
+      合計 950px
+    */
+    .gantt {
+      min-width: 950px;
+    }
+
+    .gantt-head,
+    .gantt-row {
+      display: flex;
+    }
+
+    .name-col {
+      width: 150px;
+      flex-shrink: 0;
+      border-right: 1px solid #ccc;
+      padding: 8px;
+    }
+
+    /*
+      時間軸の横幅は800px。
+      12:00〜22:00 = 10時間。
+      30分は20マスなので、
+      800px ÷ 20 = 40px/マス。
+    */
+    .timeline {
+      width: 800px;
+      position: relative;
+    }
+
+    .gantt-head .timeline {
+      height: 42px;
+      background: #fafafa;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .gantt-row {
+      border-bottom: 1px solid #ddd;
+    }
+
+    /*
+      40pxごとに縦線を引くことで
+      30分刻みの目盛りに見せています。
+    */
+    .gantt-row .timeline {
+      height: 52px;
+
+      background-image:
+        repeating-linear-gradient(
+          to right,
+          transparent 0,
+          transparent 39px,
+          #ddd 39px,
+          #ddd 40px
+        );
+    }
+
+    .hour-label {
+      position: absolute;
+      top: 8px;
+      transform: translateX(-50%);
+      font-size: 10px;
+    }
+
+    /*
+      固定と希望は同じ1本の列に重ねて表示。
+      色で区別します。
+    */
+    .bar {
+      position: absolute;
+      top: 13px;
+      height: 26px;
+      border-radius: 5px;
+      opacity: .72;
+
+      /*
+        バーは「見るだけ」なので
+        クリックを邪魔しないようにします。
+      */
+      pointer-events: none;
+    }
+
+    /*
+      固定シフトは希望シフトより手前に表示します。
+
+      固定と希望の時間が重なった時に、
+      後から描画された希望の緑色で
+      固定の青色が隠れないようにするためです。
+
+      z-index は「どちらを手前に表示するか」の数字です。
+      数字が大きい方が手前に表示されます。
+
+      固定 = 2
+      希望 = 1
+    */
+    /*
+      固定シフトと希望シフトが重なった場合の表示ルール
+
+      例：
+      固定 14:00〜20:00
+      希望 12:00〜22:00
+
+      表示は、
+
+      12:00〜14:00 → 希望（緑）
+      14:00〜20:00 → 固定（青）
+      20:00〜22:00 → 希望（緑）
+
+      にします。
+
+      今回はJavaScript側で、
+      希望から固定と重なる部分そのものを切り抜くため、
+      基本的には青と緑は重なりません。
+
+      z-index と opacity は念のための補助設定です。
+    */
+    .bar-fixed {
+      background: #4e79a7;
+
+      /* 希望より手前に表示 */
+      z-index: 2;
+
+      /* 下の緑を透けさせない */
+      opacity: 1;
+    }
+
+    .bar-hope {
+      background: #59a14f;
+
+      /* 固定より後ろに表示 */
+      z-index: 1;
+
+      /* 希望は今まで通り少し透ける */
+      opacity: .72;
+    }
+
+    .off-label {
+      position: absolute;
+      left: 8px;
+      top: 14px;
+      background: #e15759;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      pointer-events: none;
+    }
+
+    /*
+      管理者が実際に入れる「30分マス」。
+
+      普段は透明。
+      confirmed が付いた時だけオレンジになります。
+    */
+    .slot {
+      position: absolute;
+      top: 0;
+      width: 40px;
+      height: 52px;
+      border: none;
+      background: transparent;
+      padding: 0;
+      z-index: 3;
+
+      /*
+        スマホで横にドラッグした時に、
+        ブラウザのスクロール処理と競合しにくくします。
+      */
+      touch-action: none;
+    }
+
+    .slot.confirmed {
+      background: rgba(242,142,43,.34);
+      border-top: 4px solid #f28e2b;
+      border-bottom: 4px solid #f28e2b;
+    }
+
+    .edit-hope-button {
+      margin-top: 5px;
+      border: none;
+      background: #eee;
+      border-radius: 6px;
+      padding: 5px 7px;
+      font-size: 10px;
+    }
+
+    .week-nav {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .week-nav strong {
+      min-width: 200px;
+      text-align: center;
+    }
+
+    /*
+      小さいスマホだけ少し詰める
+    */
+    @media(max-width: 390px) {
+      .shift-grid {
+        padding: 5px;
+        gap: 5px;
+      }
+
+      .date-box {
+        width: 48px;
+      }
+
+      .shift-info {
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <!--
+    ============================================================
+    ここから HTML（画面の部品）
+    ============================================================
+
+    id="○○" は JavaScriptからその部品を探すための名前です。
+
+    例：
+    id="loginId"
+
+    なら JavaScriptで
+
+    document.getElementById("loginId")
+
+    と書くと、その入力欄を取得できます。
+  -->
+
+
+  <!-- ========================================================
+       1. ログイン画面
+       ======================================================== -->
+  <div id="loginPage" class="page active">
+
+    <div class="card">
+      <h1>シフト管理</h1>
+      <div class="muted">希望提出・シフト作成</div>
+
+      <label>スタッフ番号</label>
+      <input id="loginId" placeholder="例：001">
+
+      <label>名前</label>
+      <input id="loginName" placeholder="例：山田 花子">
+
+      <button class="btn btn-primary" onclick="staffLogin()">
+        スタッフログイン
+      </button>
+
+      <div class="muted" style="margin-top:10px;">
+        ※ スタッフ番号と名前は、先に管理者が登録します。
+      </div>
+    </div>
+
+
+    <div class="card">
+      <h3>管理者</h3>
+
+      <label>管理者パスワード</label>
+      <input id="adminPass" type="password">
+
+      <button class="btn btn-dark" onclick="adminLogin()">
+        管理者ログイン
+      </button>
+
+      <div class="muted">
+        試作用：admin123
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ========================================================
+       2. スタッフ画面
+       ======================================================== -->
+  <div id="staffPage" class="page">
+
+    <div class="topbar">
+
+      <div class="row">
+        <div>
+          <b id="staffName"></b>
+          <div class="muted" id="staffId"></div>
+        </div>
+
+        <button class="smallbtn" onclick="logout()">
+          ログアウト
+        </button>
+      </div>
+
+
+      <div class="month-row">
+        <button class="circle" onclick="changeMonth(-1)">‹</button>
+
+        <div class="month-title" id="monthTitle"></div>
+
+        <button class="circle" onclick="changeMonth(1)">›</button>
+      </div>
+
+
+    </div>
+
+
+    <!-- JavaScriptで1日〜月末まで自動生成 -->
+    <div id="shiftGrid" class="shift-grid"></div>
+
+
+    <div style="padding:8px 8px 30px;">
+
+      <!--
+        ======================================================
+        月ごとの要望・伝えたいこと
+        ======================================================
+
+        この内容は「今表示している月」に対して保存します。
+
+        例：
+        9月画面で書いた内容 → 9月の要望
+        10月画面で書いた内容 → 10月の要望
+      -->
+      <div class="card" style="margin:0 0 10px 0; max-width:none; box-shadow:none;">
+
+        <h3 style="margin-bottom:6px;">
+          要望・伝えたいこと
+        </h3>
+
+        <div class="muted">
+          例：○日は18時以降だと助かります、テスト期間なので少なめ希望です、など
+        </div>
+
+        <textarea
+          id="monthlyMessage"
+          placeholder="管理者に伝えたいことがあれば入力してください"
+          oninput="saveMonthlyMessageDraft()"
+        ></textarea>
+
+        <div class="muted" style="margin-top:6px;">
+          ※ 入力内容は自動保存されます。
+        </div>
+
+      </div>
+
+
+      <button class="btn btn-primary" onclick="submitMonth()">
+        この月の希望を提出
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- ========================================================
+       3. 管理者画面
+       ======================================================== -->
+  <div id="adminPage" class="page">
+
+    <div class="admin-wrap">
+
+      <div class="admin-card">
+
+        <div class="row">
+          <div>
+            <h2 style="margin:0;">シフト管理</h2>
+            <div class="muted">管理者画面</div>
+          </div>
+
+          <button class="smallbtn" onclick="logout()">
+            ログアウト
+          </button>
+        </div>
+
+
+        <div class="month-row">
+          <button class="circle" onclick="changeAdminMonth(-1)">‹</button>
+
+          <div class="month-title" id="adminMonthTitle"></div>
+
+          <button class="circle" onclick="changeAdminMonth(1)">›</button>
+        </div>
+
+
+        <div class="tabs">
+          <button id="tabStaff" class="tab active" onclick="showAdminTab('staff')">
+            スタッフ別
+          </button>
+
+          <button id="tabSchedule" class="tab" onclick="showAdminTab('schedule')">
+            日付・週別
+          </button>
+        </div>
+
+      </div>
+
+
+      <!-- スタッフ別 -->
+      <div id="staffView">
+
+        <!--
+          ======================================================
+          管理者が新しいスタッフを登録する場所
+          ======================================================
+
+          ここで登録したスタッフだけが、
+          スタッフログイン画面からログインできます。
+        -->
+        <div class="admin-card">
+
+          <h3>スタッフ追加</h3>
+
+          <div class="muted">
+            新しく働くスタッフの番号と名前を、管理者が先に登録します。
+          </div>
+
+          <label>
+            スタッフ番号
+          </label>
+
+          <input
+            id="newStaffId"
+            placeholder="例：001"
+          >
+
+
+          <label>
+            名前
+          </label>
+
+          <input
+            id="newStaffName"
+            placeholder="例：山田 花子"
+          >
+
+
+          <button
+            class="btn btn-primary"
+            onclick="addStaffByAdmin()"
+          >
+            スタッフを登録
+          </button>
+
+        </div>
+
+
+        <!-- 登録済みスタッフ一覧 -->
+        <div id="adminStaffList"></div>
+
+      </div>
+
+
+      <!-- 日付・週別 -->
+      <div id="scheduleView" style="display:none;">
+
+        <div class="admin-card">
+
+          <div class="view-toggle">
+            <button id="singleBtn" class="active" onclick="setScheduleMode('single')">
+              1日表示
+            </button>
+
+            <button id="weekBtn" onclick="setScheduleMode('week')">
+              1週間表示
+            </button>
+          </div>
+
+
+          <div class="legend">
+            <span>
+              <i class="swatch swatch-fixed"></i>
+              固定
+            </span>
+
+            <span>
+              <i class="swatch swatch-hope"></i>
+              希望
+            </span>
+
+            <span>
+              <i class="swatch swatch-confirmed"></i>
+              実際のシフト
+            </span>
+
+            <span>
+              <i class="swatch swatch-off"></i>
+              希望休
+            </span>
+          </div>
+
+
+          <div class="muted">
+            30分マスは、1回クリックでも、押したまま横にドラッグでも付け外しできます。
+            希望時間外でも確認ポップアップは出しません。
+          </div>
+
+        </div>
+
+
+        <!-- JavaScriptで1日分または7日分のガントチャートを入れる -->
+        <div id="scheduleArea"></div>
+
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================
+       4. スタッフの日ごとの希望編集
+       ======================================================== -->
+  <div id="dayModal" class="modal" onclick="outsideClose(event,'dayModal')">
+
+    <div class="modal-box">
+
+      <h3 id="dayTitle"></h3>
+
+
+      <div class="section">
+        <b>この日の希望</b>
+
+        <div class="type-buttons">
+          <button id="workBtn" onclick="selectType('work')">
+            出勤可能
+          </button>
+
+          <button id="offBtn" onclick="selectType('off')">
+            希望休
+          </button>
+        </div>
+      </div>
+
+
+      <div id="availArea">
+
+        <div class="section">
+          <b>出勤可能時間①</b>
+
+          <div class="time-row">
+            <input id="s1" type="time">
+            <span>〜</span>
+            <input id="e1" type="time">
+          </div>
+        </div>
+
+
+        <div class="section">
+          <b>出勤可能時間②（任意）</b>
+
+          <div class="time-row">
+            <input id="s2" type="time">
+            <span>〜</span>
+            <input id="e2" type="time">
+          </div>
+        </div>
+
+      </div>
+
+
+      <button class="btn btn-dark" onclick="saveDay()">
+        保存
+      </button>
+
+      <button class="btn btn-light" onclick="deleteDay()">
+        この日の希望を削除
+      </button>
+
+      <button class="btn btn-light" onclick="closeModal('dayModal')">
+        閉じる
+      </button>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================
+       5. 固定シフト編集
+       ========================================================
+
+       固定シフトの変更は管理者だけが行います。
+
+       JavaScript側で
+       「今、誰の固定を編集しているか」
+       を記録して、このモーダルを開きます。
+  -->
+  <div id="fixedModal" class="modal" onclick="outsideClose(event,'fixedModal')">
+
+    <div class="modal-box">
+
+      <h3 id="fixedModalTitle">固定シフト設定</h3>
+
+      <!--
+        固定シフトを「いつから変えるか」を指定します。
+
+        例：
+        9/30までは今までの固定
+        10/1から新しい固定
+
+        のように、過去の固定を消さずに変更できます。
+      -->
+      <div class="section">
+
+        <b>この固定シフトをいつから適用しますか？</b>
+
+        <input
+          id="fixedEffectiveFrom"
+          type="date"
+        >
+
+        <div class="muted" style="margin-top:6px;">
+          この日より前の固定シフトはそのまま残ります。
+        </div>
+
+      </div>
+
+      <div id="fixedSettings"></div>
+
+      <button class="btn btn-dark" onclick="saveFixedSettings()">
+        この日からの固定シフトとして保存
+      </button>
+
+      <button class="btn btn-light" onclick="closeModal('fixedModal')">
+        閉じる
+      </button>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================
+       6. 管理者が希望を変更
+       ======================================================== -->
+  <div id="adminEditModal" class="modal" onclick="outsideClose(event,'adminEditModal')">
+
+    <div class="modal-box">
+
+      <h3 id="adminEditTitle"></h3>
+
+
+      <div class="section">
+        <b>希望を変更</b>
+
+        <div class="type-buttons">
+          <button id="aWork" onclick="selectAdminType('work')">
+            出勤可能
+          </button>
+
+          <button id="aOff" onclick="selectAdminType('off')">
+            希望休
+          </button>
+        </div>
+      </div>
+
+
+      <div id="adminAvail">
+
+        <div class="section">
+          <b>出勤可能時間①</b>
+
+          <div class="time-row">
+            <input id="as1" type="time">
+            <span>〜</span>
+            <input id="ae1" type="time">
+          </div>
+        </div>
+
+
+        <div class="section">
+          <b>出勤可能時間②（任意）</b>
+
+          <div class="time-row">
+            <input id="as2" type="time">
+            <span>〜</span>
+            <input id="ae2" type="time">
+          </div>
+        </div>
+
+      </div>
+
+
+      <button class="btn btn-dark" onclick="saveAdminEdit()">
+        変更を保存
+      </button>
+
+      <button class="btn btn-light" onclick="closeModal('adminEditModal')">
+        閉じる
+      </button>
+
+    </div>
+  </div>
+
+
+
+  <!-- ========================================================
+       7. 管理者：その日だけのイレギュラー固定シフト
+       ========================================================
+
+       例：
+       普段は月曜 17:00〜21:00 だけど、
+       10/12だけ 14:00〜18:00
+
+       のような「その日だけ違う固定」を設定できます。
+
+       通常の固定シフト自体は変更しません。
+  -->
+  <div id="irregularFixedModal" class="modal" onclick="outsideClose(event,'irregularFixedModal')">
+
+    <div class="modal-box">
+
+      <h3 id="irregularFixedTitle">
+        この日の固定シフト
+      </h3>
+
+      <div class="section">
+
+        <div class="type-buttons">
+
+          <button
+            id="irregularFixedOn"
+            onclick="selectIrregularFixedType('on')"
+          >
+            この日だけ固定あり
+          </button>
+
+          <button
+            id="irregularFixedOff"
+            onclick="selectIrregularFixedType('off')"
+          >
+            この日だけ固定なし
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <div id="irregularFixedTimeArea" class="section">
+
+        <b>この日だけの固定時間</b>
+
+        <div class="time-row">
+
+          <input
+            id="irregularFixedStart"
+            type="time"
+          >
+
+          <span>〜</span>
+
+          <input
+            id="irregularFixedEnd"
+            type="time"
+          >
+
+        </div>
+
+      </div>
+
+
+      <button
+        class="btn btn-dark"
+        onclick="saveIrregularFixed()"
+      >
+        この日の固定を保存
+      </button>
+
+
+      <button
+        class="btn btn-light"
+        onclick="clearIrregularFixed()"
+      >
+        通常の固定シフトに戻す
+      </button>
+
+
+      <button
+        class="btn btn-light"
+        onclick="closeModal('irregularFixedModal')"
+      >
+        閉じる
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <script>
+    /*
+      ============================================================
+      ここから JavaScript（動き）
+      ============================================================
+
+      JavaScriptでは、
+
+      1. データを読み込む
+      2. ボタンを押した時に処理する
+      3. 画面を作り直す
+      4. localStorageに保存する
+
+      という流れを繰り返します。
+
+      「変数」：
+      値を一時的に覚えておく箱です。
+
+      例：
+      let name = "山田";
+
+      なら name という箱に "山田" が入っています。
+    */
+
+
+    /* 曜日の名前。0番が日曜、1番が月曜… */
+    const weekNames = [
+      "日",
+      "月",
+      "火",
+      "水",
+      "木",
+      "金",
+      "土"
+    ];
+
+
+    /*
+      ------------------------------------------------------------
+      今の状態を覚える変数
+      ------------------------------------------------------------
+    */
+
+    /* 現在ログイン中のスタッフ。ログインしていない時は null */
+    let currentUser = null;
+
+
+    /* スタッフ側で表示中の月 */
+    let currentMonth = new Date();
+    currentMonth.setDate(1);
+
+
+    /* 管理者側で表示中の月 */
+    let adminMonth = new Date();
+    adminMonth.setDate(1);
+
+
+    /* スタッフが今編集している日 */
+    let selectedDate = null;
+
+
+    /*
+      "work" = 出勤可能
+      "off"  = 希望休
+    */
+    let selectedType = "work";
+
+
+    /*
+      管理者のガントチャート表示方法
+
+      single = 1日
+      week   = 1週間
+    */
+    let scheduleMode = "single";
+
+
+    /*
+      管理者画面で今どのタブを見ているかを覚えます。
+
+      "staff"    = スタッフ別
+      "schedule" = 日付・週別
+
+      これを分けておくことで、
+      「週表示で7月に移動しただけなのに、
+       スタッフ別の8月提出状況まで7月扱いになる」
+      という不具合を防ぎます。
+    */
+    let currentAdminTab = "staff";
+
+
+    /*
+      日付・週別タブで「今どの月を見ているか」を覚える変数です。
+
+      これは weekStart と分けて持つのがポイントです。
+
+      例：
+      2026年8月を表示したい
+      ↓
+      8/1(土) が含まれる週の月曜日は 7/27(月)
+
+      この時、
+
+      scheduleMonth = 2026年8月
+      weekStart     = 2026/7/27
+
+      になります。
+
+      つまり、
+      上には「2026年8月」と表示しながら、
+      週表示は 7/27〜8/2 から始められます。
+    */
+    let scheduleMonth =
+      new Date();
+
+
+    scheduleMonth.setDate(1);
+
+
+    /* 1日表示で現在選択中の日 */
+    let selectedScheduleDate = new Date();
+
+
+    /* 週表示の開始日（月曜日） */
+    let weekStart = getMonday(new Date());
+
+
+    /*
+      管理者が現在編集している希望情報
+    */
+    let adminEditingUserId = null;
+    let adminEditingDateKey = null;
+    let adminEditingType = "work";
+
+
+    /*
+      固定シフト編集用。
+
+      スタッフ本人でも管理者でも同じ画面を使うため、
+      「誰の固定を編集しているのか」をここに覚えます。
+    */
+    let fixedEditingUserId = null;
+
+
+    /*
+      管理者が「その日だけの固定シフト」を編集する時に使います。
+    */
+    let irregularFixedEditingUserId = null;
+    let irregularFixedEditingDateKey = null;
+
+    /*
+      "on"  = この日だけ固定あり
+      "off" = この日だけ固定なし
+    */
+    let irregularFixedEditingType = "on";
+
+
+    /*
+      ------------------------------------------------------------
+      localStorage から保存済みデータを読み込む
+      ------------------------------------------------------------
+
+      localStorage.getItem("名前")
+      で文字列として取り出し、
+
+      JSON.parse()
+      で JavaScriptのデータに戻しています。
+
+      || "{}"
+      は、「まだ何も保存されていなければ空のデータを使う」
+      という意味です。
+    */
+
+    /* スタッフ一覧 */
+    let users =
+      JSON.parse(
+        localStorage.getItem("shiftAppUsers") || "{}"
+      );
+
+
+    /* 希望シフト */
+    let allShiftData =
+      JSON.parse(
+        localStorage.getItem("shiftAppShiftData") || "{}"
+      );
+
+
+    /*
+      従来の固定シフト。
+
+      これは今までのデータとの互換性のため残しています。
+      新しい「○月○日から変更」は fixedShiftVersions に保存します。
+    */
+    let allFixedShifts =
+      JSON.parse(
+        localStorage.getItem("shiftAppFixedShifts") || "{}"
+      );
+
+
+    /*
+      固定シフトの変更履歴。
+
+      例：
+      fixedShiftVersions = {
+        "001": [
+          {
+            effectiveFrom: "2026-10-01",
+            weekdays: {
+              "1": {enabled:true,start:"17:00",end:"21:00"}
+            }
+          },
+          {
+            effectiveFrom: "2026-11-01",
+            weekdays: {
+              "1": {enabled:true,start:"18:00",end:"22:00"}
+            }
+          }
+        ]
+      }
+
+      こうしておくと、
+      10月は10月の固定、
+      11月からは11月の固定、
+      というように「過去を残したまま変更」できます。
+    */
+    let fixedShiftVersions =
+      JSON.parse(
+        localStorage.getItem("shiftAppFixedShiftVersions") || "{}"
+      );
+
+
+    /*
+      その日だけのイレギュラー固定シフト。
+
+      例：
+      irregularFixedShifts = {
+        "001": {
+          "2026-10-12": {
+            enabled:true,
+            start:"14:00",
+            end:"18:00"
+          }
+        }
+      }
+
+      enabled:false を保存すると、
+      「その日だけ固定なし」にできます。
+    */
+    let irregularFixedShifts =
+      JSON.parse(
+        localStorage.getItem("shiftAppIrregularFixedShifts") || "{}"
+      );
+
+
+    /* 提出済み情報 */
+    let submissions =
+      JSON.parse(
+        localStorage.getItem("shiftAppSubmissions") || "{}"
+      );
+
+
+    /*
+      月ごとの「要望・伝えたいこと」
+
+      保存イメージ：
+
+      monthlyMessages = {
+        "001": {
+          "2026-09": "9/20は18時以降希望です"
+        }
+      }
+
+      という形です。
+
+      最初のキーがスタッフ番号、
+      その中のキーが月です。
+    */
+    let monthlyMessages =
+      JSON.parse(
+        localStorage.getItem("shiftAppMonthlyMessages") || "{}"
+      );
+
+
+    /*
+      管理者が実際に入れた確定シフト。
+
+      例：
+      0  = 12:00〜12:30
+      1  = 12:30〜13:00
+      2  = 13:00〜13:30
+      ...
+      19 = 21:30〜22:00
+    */
+    let confirmedShifts =
+      JSON.parse(
+        localStorage.getItem("shiftAppConfirmed") || "{}"
+      );
+
+
+    /*
+      ============================================================
+      古い fixedOverride データのお掃除
+      ============================================================
+
+      以前のバージョンでは、
+      スタッフが日ごとの希望を保存した時に、
+
+      data.fixedOverride
+
+      という「その日だけの固定変更」が
+      希望データの中に残ることがありました。
+
+      今は固定シフトを変更できるのは管理者だけなので、
+      この古いデータは不要です。
+
+      しかも、この fixedOverride が残っていると、
+
+      管理者が通常固定を設定
+      ↓
+      その日に希望を入力済み
+      ↓
+      古い fixedOverride が優先される
+      ↓
+      青い固定シフトが表示されない
+
+      という不具合が起きます。
+
+      そこで、このHTMLを開いた時に
+      古い fixedOverride を自動で削除します。
+    */
+    function removeOldStaffFixedOverrides() {
+
+      let changed =
+        false;
+
+
+      Object
+        .keys(allShiftData)
+        .forEach(
+          userId => {
+
+            const userDays =
+              allShiftData[userId]
+              ||
+              {};
+
+
+            Object
+              .keys(userDays)
+              .forEach(
+                dateKey => {
+
+                  const dayData =
+                    userDays[dateKey];
+
+
+                  if (
+                    dayData
+                    &&
+                    Object.prototype.hasOwnProperty.call(
+                      dayData,
+                      "fixedOverride"
+                    )
+                  ) {
+
+                    delete dayData.fixedOverride;
+
+                    changed =
+                      true;
+
+                  }
+
+                }
+              );
+
+          }
+        );
+
+
+      /*
+        1件でも削除した時だけ保存し直します。
+      */
+      if (changed) {
+
+        localStorage.setItem(
+          "shiftAppShiftData",
+          JSON.stringify(
+            allShiftData
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+      ページを開いた時に1回だけ実行
+    */
+    removeOldStaffFixedOverrides();
+
+
+    /*
+      ============================================================
+      保存用の共通関数
+      ============================================================
+
+      save("shiftAppUsers", users);
+
+      のように呼ぶと、users の中身を localStorage に保存します。
+    */
+    function save(key, object) {
+
+      localStorage.setItem(
+        key,
+        JSON.stringify(object)
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      ページ切り替え
+      ============================================================
+
+      いったん全ページから active を外し、
+      表示したいページだけ active を付けます。
+    */
+    function showPage(id) {
+
+      document
+        .querySelectorAll(".page")
+        .forEach(
+          page => {
+            page.classList.remove("active");
+          }
+        );
+
+
+      document
+        .getElementById(id)
+        .classList.add("active");
+
+    }
+
+
+    /*
+      ============================================================
+      日付を保存用文字列に変換
+      ============================================================
+
+      例：
+      2026年9月16日
+      ↓
+      "2026-09-16"
+
+      この形式にすると、日付ごとのデータを管理しやすくなります。
+    */
+    function fmtDate(date) {
+
+      return (
+        date.getFullYear()
+        +
+        "-"
+        +
+        String(date.getMonth() + 1).padStart(2, "0")
+        +
+        "-"
+        +
+        String(date.getDate()).padStart(2, "0")
+      );
+
+    }
+
+
+    /*
+      月だけのキー。
+
+      例：
+      "2026-09"
+    */
+    function fmtMonth(date) {
+
+      return (
+        date.getFullYear()
+        +
+        "-"
+        +
+        String(date.getMonth() + 1).padStart(2, "0")
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      指定した日が含まれる週の月曜日を取得
+      ============================================================
+
+      週表示を「月〜日」にするために使います。
+    */
+    function getMonday(date) {
+
+      const d = new Date(date);
+
+      const day = d.getDay();
+
+
+      /*
+        JavaScriptでは
+        日=0
+        月=1
+        火=2
+        ...
+        土=6
+
+        です。
+      */
+      const diff =
+        day === 0
+        ? -6
+        : 1 - day;
+
+
+      d.setDate(
+        d.getDate() + diff
+      );
+
+
+      d.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+
+      return d;
+
+    }
+
+
+    /*
+      ============================================================
+      時間入力が正しいか確認
+      ============================================================
+
+      ・両方空欄 → OK
+      ・片方だけ → NG
+      ・開始 >= 終了 → NG
+    */
+    function validRange(start, end) {
+
+      if (
+        !start &&
+        !end
+      ) {
+        return true;
+      }
+
+
+      return (
+        Boolean(start)
+        &&
+        Boolean(end)
+        &&
+        start < end
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフログイン
+      ============================================================
+
+      今回から、
+      「スタッフが自分で初回登録する方式」はやめました。
+
+      先に管理者が管理者画面から
+
+      ・スタッフ番号
+      ・名前
+
+      を登録します。
+
+      そのあとスタッフ本人が、
+      登録済みのスタッフ番号と名前を入力してログインします。
+
+      つまり、
+
+      管理者が登録
+      ↓
+      スタッフがログイン
+
+      という流れです。
+    */
+    function staffLogin() {
+
+      const id =
+        document
+          .getElementById("loginId")
+          .value
+          .trim();
+
+
+      const name =
+        document
+          .getElementById("loginName")
+          .value
+          .trim();
+
+
+      if (
+        !id ||
+        !name
+      ) {
+
+        alert(
+          "スタッフ番号と名前を入力してください"
+        );
+
+        return;
+
+      }
+
+
+      /*
+        管理者がまだ登録していないスタッフ番号ならログイン不可
+      */
+      if (!users[id]) {
+
+        alert(
+          "このスタッフ番号はまだ登録されていません。\n管理者に登録してもらってください。"
+        );
+
+        return;
+
+      }
+
+
+      /*
+        スタッフ番号は登録済みでも、
+        入力した名前が登録名と違う場合はログイン不可
+      */
+      if (
+        users[id].name !== name
+      ) {
+
+        alert(
+          "スタッフ番号と登録名が一致しません"
+        );
+
+        return;
+
+      }
+
+
+      /* ログイン中スタッフとして覚える */
+      currentUser = users[id];
+
+
+      /*
+        このスタッフ用のデータ箱がなければ作る。
+
+        ??= は
+        「左側が空なら右側を入れる」
+        という意味です。
+      */
+      allShiftData[id] ??= {};
+      allFixedShifts[id] ??= {};
+      fixedShiftVersions[id] ??= [];
+      irregularFixedShifts[id] ??= {};
+      monthlyMessages[id] ??= {};
+
+
+      /*
+        画面上部に名前と番号を表示
+      */
+      document
+        .getElementById("staffName")
+        .textContent =
+        name + " さん";
+
+
+      document
+        .getElementById("staffId")
+        .textContent =
+        "スタッフ番号：" + id;
+
+
+      /*
+        スタッフ画面に移動
+      */
+      showPage("staffPage");
+
+
+      /*
+        月間シフトを作り直す
+      */
+      renderMonth();
+
+    }
+
+
+    /*
+      ============================================================
+      管理者ログイン
+      ============================================================
+
+      ※ 今は試作品なので admin123 をHTML内に直接書いています。
+         本番ではFirebase Authenticationなどに変えます。
+    */
+    function adminLogin() {
+
+      const password =
+        document
+          .getElementById("adminPass")
+          .value;
+
+
+      if (
+        password !== "admin123"
+      ) {
+
+        alert(
+          "パスワードが違います"
+        );
+
+        return;
+
+      }
+
+
+      /*
+        管理者画面を最初に開いた時は、
+        「今日」を1日表示の初期日付にします。
+
+        例：
+        今日が 2026/9/16 なら、
+        最初に 9/16 が表示されます。
+      */
+      selectedScheduleDate =
+        new Date();
+
+
+      /*
+        週表示の初期位置も、
+        「今日が含まれる週の月曜日」にします。
+
+        例：
+        今日が水曜日なら、その週の月曜日〜日曜日を表示します。
+      */
+      weekStart =
+        getMonday(
+          selectedScheduleDate
+        );
+
+
+      /*
+        上部の「○年○月」表示も
+        今日の月に合わせます。
+      */
+      adminMonth =
+        new Date(
+          selectedScheduleDate.getFullYear(),
+          selectedScheduleDate.getMonth(),
+          1
+        );
+
+
+      /*
+        日付・週別タブの表示月も今日の月にします。
+      */
+      scheduleMonth =
+        new Date(
+          selectedScheduleDate.getFullYear(),
+          selectedScheduleDate.getMonth(),
+          1
+        );
+
+
+      /*
+        ログイン直後はスタッフ別タブから開始
+      */
+      currentAdminTab =
+        "staff";
+
+
+      showPage("adminPage");
+
+      renderAdmin();
+
+    }
+
+
+    /*
+      ============================================================
+      ログアウト
+      ============================================================
+    */
+    function logout() {
+
+      currentUser = null;
+
+      showPage("loginPage");
+
+    }
+
+
+    /*
+      ============================================================
+      月移動
+      ============================================================
+    */
+    function changeMonth(move) {
+
+      currentMonth.setMonth(
+        currentMonth.getMonth() + move
+      );
+
+      renderMonth();
+
+    }
+
+
+    function changeAdminMonth(move) {
+
+      /*
+        上部の「月」の左右ボタンを押した時の処理です。
+      */
+
+      if (
+        currentAdminTab === "staff"
+      ) {
+
+        /*
+          スタッフ別タブでは、
+          希望提出を見る月を普通に1か月移動します。
+        */
+        adminMonth.setMonth(
+          adminMonth.getMonth() + move
+        );
+
+
+        renderAdminStaff();
+
+      }
+
+      else {
+
+        /*
+          日付・週別タブでは、
+          scheduleMonth を1か月移動します。
+
+          例：
+          2026年7月
+          ↓ 右矢印
+          2026年8月
+        */
+        scheduleMonth =
+          new Date(
+            scheduleMonth.getFullYear(),
+            scheduleMonth.getMonth() + move,
+            1
+          );
+
+
+        /*
+          1日表示なら、その月の1日を表示します。
+        */
+        if (
+          scheduleMode === "single"
+        ) {
+
+          selectedScheduleDate =
+            new Date(
+              scheduleMonth.getFullYear(),
+              scheduleMonth.getMonth(),
+              1
+            );
+
+        }
+
+
+        /*
+          週表示なら、
+          「その月の1日が入っている週の月曜日」
+          を最初に表示します。
+
+          例：
+          2026/8/1 が土曜日なら
+
+          8/1が入っている週
+          = 7/27(月)〜8/2(日)
+
+          なので weekStart は 7/27 になります。
+
+          でも scheduleMonth は8月のままなので、
+          上部表示はちゃんと「2026年8月」です。
+        */
+        else {
+
+          const firstDayOfMonth =
+            new Date(
+              scheduleMonth.getFullYear(),
+              scheduleMonth.getMonth(),
+              1
+            );
+
+
+          weekStart =
+            getMonday(
+              firstDayOfMonth
+            );
+
+        }
+
+
+        renderSchedule();
+
+      }
+
+
+      updateAdminHeaderMonth();
+
+    }
+
+
+    /*
+      ============================================================
+      その日の「通常固定」を取得
+      ============================================================
+
+      ここでは「その日だけの例外」はまだ見ません。
+
+      まず、
+      fixedShiftVersions の中から
+      effectiveFrom がその日以前のものだけを探します。
+
+      その中で一番新しいものを使います。
+
+      例：
+      10/1からA
+      11/1からB
+
+      なら、
+      10/20 → A
+      11/20 → B
+
+      を使います。
+    */
+    function getBaseFixed(userId, date) {
+
+      const dateKey =
+        fmtDate(date);
+
+
+      const versions =
+        fixedShiftVersions[userId]
+        ||
+        [];
+
+
+      /*
+        適用開始日がこの日以前の履歴だけ残す
+      */
+      const usableVersions =
+        versions
+          .filter(
+            version =>
+            version.effectiveFrom <= dateKey
+          )
+          .sort(
+            (a, b) =>
+            a.effectiveFrom.localeCompare(
+              b.effectiveFrom
+            )
+          );
+
+
+      /*
+        履歴が1つ以上あれば、
+        一番最後 = 一番新しい履歴を使う
+      */
+      if (
+        usableVersions.length > 0
+      ) {
+
+        const newest =
+          usableVersions[
+            usableVersions.length - 1
+          ];
+
+
+        return (
+          newest.weekdays[
+            date.getDay()
+          ]
+          ||
+          null
+        );
+
+      }
+
+
+      /*
+        変更履歴がまだない場合は、
+        以前から保存されている固定シフトを使います。
+
+        これで古いデータもそのまま使えます。
+      */
+      return (
+        (
+          allFixedShifts[userId]
+          ||
+          {}
+        )[date.getDay()]
+        ||
+        null
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      その日の「実際に表示する固定シフト」を取得
+      ============================================================
+
+      優先順位は、
+
+      1. 管理者が設定した、その日だけのイレギュラー固定
+      2. その日付時点の通常固定
+
+      です。
+
+      ※ 以前のバージョンには、
+         スタッフ側からその日だけ固定を変える
+         fixedOverride というデータがありました。
+
+         今はスタッフ側では固定変更をさせないため、
+         fixedOverride は固定判定に使いません。
+
+         これが今回の「希望を入れた日に青い固定が消える」
+         原因になっていました。
+    */
+    function getFixed(userId, date) {
+
+      const dateKey =
+        fmtDate(date);
+
+
+      /*
+        1. 管理者のイレギュラー固定
+      */
+      const irregular =
+        (
+          irregularFixedShifts[userId]
+          ||
+          {}
+        )[dateKey];
+
+
+      if (irregular) {
+
+        return irregular;
+
+      }
+
+
+      /*
+        2. 通常固定
+
+        希望データがあるかどうかとは無関係に、
+        管理者が設定した固定シフトを取得します。
+      */
+      return getBaseFixed(
+        userId,
+        date
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      確定シフトを文字に変換
+      ============================================================
+
+      例：
+      [4,5,6]
+
+      なら
+
+      14:00〜15:30
+
+      とまとめて表示します。
+    */
+    function getConfirmedText(userId, dateKey) {
+
+      const slots =
+        [
+          ...(
+            (
+              confirmedShifts[userId]
+              ||
+              {}
+            )[dateKey]
+            ||
+            []
+          )
+        ]
+        .sort(
+          (a, b) => a - b
+        );
+
+
+      if (
+        slots.length === 0
+      ) {
+        return "";
+      }
+
+
+      const ranges = [];
+
+
+      let start =
+        slots[0];
+
+
+      let previous =
+        slots[0];
+
+
+      for (
+        let i = 1;
+        i < slots.length;
+        i++
+      ) {
+
+        /*
+          前のマスの次なら
+          連続シフトとしてまとめる
+        */
+        if (
+          slots[i] === previous + 1
+        ) {
+
+          previous =
+            slots[i];
+
+          continue;
+
+        }
+
+
+        ranges.push(
+          slotTime(start)
+          +
+          "〜"
+          +
+          slotTime(previous + 1)
+        );
+
+
+        start =
+          slots[i];
+
+
+        previous =
+          slots[i];
+
+      }
+
+
+      /*
+        最後のかたまりも追加
+      */
+      ranges.push(
+        slotTime(start)
+        +
+        "〜"
+        +
+        slotTime(previous + 1)
+      );
+
+
+      return ranges.join(" / ");
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフ側：月間シフトを描画
+      ============================================================
+
+      「描画」は、
+      JavaScriptでHTMLを作って画面に表示することです。
+    */
+    function renderMonth() {
+
+      const year =
+        currentMonth.getFullYear();
+
+
+      const month =
+        currentMonth.getMonth();
+
+
+      /*
+        その月の最終日を取得。
+
+        new Date(年, 翌月, 0)
+        とすると「今月の最終日」になります。
+      */
+      const lastDay =
+        new Date(
+          year,
+          month + 1,
+          0
+        ).getDate();
+
+
+      document
+        .getElementById("monthTitle")
+        .textContent =
+        year
+        +
+        "年 "
+        +
+        (month + 1)
+        +
+        "月";
+
+
+      const container =
+        document
+          .getElementById("shiftGrid");
+
+
+      /*
+        一度中身を空にしてから作り直す
+      */
+      container.innerHTML = "";
+
+
+      /*
+        1日から月末まで繰り返す
+      */
+      for (
+        let day = 1;
+        day <= lastDay;
+        day++
+      ) {
+
+        const date =
+          new Date(
+            year,
+            month,
+            day
+          );
+
+
+        const dateKey =
+          fmtDate(date);
+
+
+        const data =
+          (
+            allShiftData[
+              currentUser.id
+            ]
+            ||
+            {}
+          )[dateKey];
+
+
+        const fixed =
+          getFixed(
+            currentUser.id,
+            date
+          );
+
+
+        const confirmed =
+          getConfirmedText(
+            currentUser.id,
+            dateKey
+          );
+
+
+        /*
+          右側に表示する文章を作る
+        */
+        let html = "";
+
+
+        if (
+          fixed &&
+          fixed.enabled
+        ) {
+
+          html +=
+          `
+            <div class="fixed-text">
+              固定
+            </div>
+
+            <div>
+              ${fixed.start}〜${fixed.end}
+            </div>
+          `;
+
+        }
+
+
+        if (!data) {
+
+          html +=
+          `
+            <div class="muted">
+              希望 未入力
+            </div>
+          `;
+
+        }
+
+        else if (
+          data.type === "off"
+        ) {
+
+          html +=
+          `
+            <div class="off-text">
+              希望休
+            </div>
+          `;
+
+        }
+
+        else {
+
+          html +=
+          `
+            <div class="hope-text">
+              希望
+            </div>
+
+            <div>
+              ${data.available1.start}
+              〜
+              ${data.available1.end}
+            </div>
+          `;
+
+
+          if (
+            data.available2
+          ) {
+
+            html +=
+            `
+              <div>
+                ${data.available2.start}
+                〜
+                ${data.available2.end}
+              </div>
+            `;
+
+          }
+
+        }
+
+
+        /*
+          管理者が希望を変更した場合
+        */
+        if (
+          data &&
+          data.editedBy === "admin"
+        ) {
+
+          html +=
+          `
+            <div class="admin-edited">
+              管理者更新
+            </div>
+          `;
+
+        }
+
+
+        /*
+          確定シフトがある場合
+        */
+        if (confirmed) {
+
+          html +=
+          `
+            <div class="confirmed-text">
+              確定
+            </div>
+
+            <div>
+              ${confirmed}
+            </div>
+          `;
+
+        }
+
+
+        /*
+          1日分のカードを作る
+        */
+        const card =
+          document
+            .createElement("div");
+
+
+        card.className =
+          "shift-card";
+
+
+        card.innerHTML =
+        `
+          <div
+            class="
+              date-box
+              ${
+                date.getDay() === 0
+                ? "sun"
+                : ""
+              }
+            "
+          >
+
+            <div>
+              <div>${month + 1}/</div>
+
+              <div class="date-num">
+                ${day}
+              </div>
+
+              <div>
+                (${weekNames[date.getDay()]})
+              </div>
+            </div>
+
+          </div>
+
+          <button class="shift-info">
+            ${html}
+          </button>
+        `;
+
+
+        /*
+          右側を押したら
+          その日の編集画面を開く
+        */
+        card
+          .querySelector("button")
+          .onclick =
+          () => openDay(date);
+
+
+        container.appendChild(card);
+
+      }
+
+
+      /*
+        月間カレンダーを作り終えたら、
+        その月の「要望・伝えたいこと」を入力欄に表示します。
+      */
+      loadMonthlyMessage();
+
+    }
+
+
+    /*
+      ============================================================
+      月ごとの「要望・伝えたいこと」
+      ============================================================
+    */
+
+    /*
+      今表示している月の要望を入力欄に表示する関数
+    */
+    function loadMonthlyMessage() {
+
+      /*
+        ログインしていない場合や、
+        まだ入力欄が画面上にない場合は何もしません。
+      */
+      if (!currentUser) {
+        return;
+      }
+
+
+      const textarea =
+        document
+          .getElementById("monthlyMessage");
+
+
+      if (!textarea) {
+        return;
+      }
+
+
+      const monthKey =
+        fmtMonth(currentMonth);
+
+
+      const userMessages =
+        monthlyMessages[currentUser.id]
+        ||
+        {};
+
+
+      /*
+        保存済みの文章があれば表示。
+        なければ空欄。
+      */
+      textarea.value =
+        userMessages[monthKey]
+        ||
+        "";
+
+    }
+
+
+    /*
+      文字を入力するたびに自動保存する関数
+
+      HTML側の
+      oninput="saveMonthlyMessageDraft()"
+      から呼ばれます。
+    */
+    function saveMonthlyMessageDraft() {
+
+      if (!currentUser) {
+        return;
+      }
+
+
+      const monthKey =
+        fmtMonth(currentMonth);
+
+
+      const message =
+        document
+          .getElementById("monthlyMessage")
+          .value;
+
+
+      /*
+        このスタッフ用の箱がなければ作る
+      */
+      monthlyMessages[currentUser.id] ??= {};
+
+
+      /*
+        今表示している月に文章を保存
+      */
+      monthlyMessages[currentUser.id][monthKey] =
+        message;
+
+
+      save(
+        "shiftAppMonthlyMessages",
+        monthlyMessages
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフ：1日の編集画面を開く
+      ============================================================
+    */
+    function openDay(date) {
+
+      selectedDate =
+        new Date(date);
+
+
+      const dateKey =
+        fmtDate(date);
+
+
+      const data =
+        (
+          allShiftData[
+            currentUser.id
+          ]
+          ||
+          {}
+        )[dateKey];
+
+
+      /*
+        固定シフトは管理者が設定するため、
+        スタッフの編集画面では希望だけを扱います。
+      */
+
+
+      /*
+        モーダルのタイトル
+      */
+      document
+        .getElementById("dayTitle")
+        .textContent =
+        (date.getMonth() + 1)
+        +
+        "月"
+        +
+        date.getDate()
+        +
+        "日（"
+        +
+        weekNames[date.getDay()]
+        +
+        "）";
+
+
+      /*
+        既存希望があれば、その種類を使う。
+        なければ出勤可能を初期値にする。
+      */
+      selectedType =
+        data
+        ? data.type
+        : "work";
+
+
+      /*
+        希望①・②の入力欄へ既存値を入れる
+      */
+      const inputs = [
+
+        [
+          "s1",
+          "available1",
+          "start"
+        ],
+
+        [
+          "e1",
+          "available1",
+          "end"
+        ],
+
+        [
+          "s2",
+          "available2",
+          "start"
+        ],
+
+        [
+          "e2",
+          "available2",
+          "end"
+        ]
+
+      ];
+
+
+      inputs.forEach(
+        ([inputId, objectName, propertyName]) => {
+
+          document
+            .getElementById(inputId)
+            .value =
+            data &&
+            data[objectName]
+            ? data[objectName][propertyName]
+            : "";
+
+        }
+      );
+
+
+      updateTypeUI();
+
+
+      /*
+        モーダルを表示
+      */
+      document
+        .getElementById("dayModal")
+        .style.display =
+        "flex";
+
+    }
+
+
+    /*
+      出勤可能 / 希望休 を切り替える
+    */
+    function selectType(type) {
+
+      selectedType = type;
+
+      updateTypeUI();
+
+    }
+
+
+    /*
+      選ばれている方のボタンを黒くする
+    */
+    function updateTypeUI() {
+
+      document
+        .getElementById("workBtn")
+        .classList
+        .toggle(
+          "active",
+          selectedType === "work"
+        );
+
+
+      document
+        .getElementById("offBtn")
+        .classList
+        .toggle(
+          "active",
+          selectedType === "off"
+        );
+
+
+      /*
+        希望休なら時間入力欄を隠す
+      */
+      document
+        .getElementById("availArea")
+        .style.display =
+        selectedType === "work"
+        ? "block"
+        : "none";
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフ：1日の希望保存
+      ============================================================
+    */
+    function saveDay() {
+
+      const dateKey =
+        fmtDate(
+          selectedDate
+        );
+
+
+      const userId =
+        currentUser.id;
+
+
+      let data;
+
+
+      /*
+        希望休
+      */
+      if (
+        selectedType === "off"
+      ) {
+
+        data = {
+          type: "off",
+          editedBy: "staff"
+        };
+
+      }
+
+
+      /*
+        出勤可能
+      */
+      else {
+
+        const start1 =
+          document
+            .getElementById("s1")
+            .value;
+
+
+        const end1 =
+          document
+            .getElementById("e1")
+            .value;
+
+
+        const start2 =
+          document
+            .getElementById("s2")
+            .value;
+
+
+        const end2 =
+          document
+            .getElementById("e2")
+            .value;
+
+
+        if (
+          !start1
+          ||
+          !end1
+          ||
+          start1 >= end1
+          ||
+          !validRange(
+            start2,
+            end2
+          )
+        ) {
+
+          alert(
+            "出勤可能時間を確認してください"
+          );
+
+          return;
+
+        }
+
+
+        data = {
+
+          type: "work",
+
+          available1: {
+            start: start1,
+            end: end1
+          },
+
+          available2:
+            start2
+            ? {
+                start: start2,
+                end: end2
+              }
+            : null,
+
+          editedBy: "staff"
+
+        };
+
+      }
+
+
+      /*
+        スタッフは固定シフトを変更しません。
+        ここでは希望内容だけを保存します。
+      */
+
+
+      allShiftData[userId][dateKey] =
+        data;
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      closeModal("dayModal");
+
+      renderMonth();
+
+    }
+
+
+    /*
+      その日の希望だけ削除
+    */
+    function deleteDay() {
+
+      delete allShiftData[
+        currentUser.id
+      ][
+        fmtDate(selectedDate)
+      ];
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      closeModal("dayModal");
+
+      renderMonth();
+
+    }
+
+
+    /*
+      ============================================================
+      固定シフト編集画面
+      ============================================================
+
+      固定シフトの変更は管理者だけが行います。
+
+      fixedEditingUserId に
+      「今どのスタッフの固定を編集しているか」
+      を入れてから編集画面を開きます。
+    */
+
+    function openFixedForAdmin(userId) {
+
+      fixedEditingUserId =
+        userId;
+
+
+      openFixedEditor();
+
+    }
+
+
+    function openFixedEditor() {
+
+      const user =
+        users[
+          fixedEditingUserId
+        ];
+
+
+      document
+        .getElementById("fixedModalTitle")
+        .textContent =
+        user.name
+        +
+        " の固定シフト設定";
+
+
+      /*
+        固定シフト変更は管理者だけが行うため、
+        適用開始日の初期値は
+        管理者が今見ている月の1日にします。
+
+        必要なら日付入力欄で好きな日に変更できます。
+      */
+      const defaultDate =
+        new Date(
+          adminMonth.getFullYear(),
+          adminMonth.getMonth(),
+          1
+        );
+
+
+      document
+        .getElementById("fixedEffectiveFrom")
+        .value =
+        fmtDate(defaultDate);
+
+
+      const container =
+        document
+          .getElementById("fixedSettings");
+
+
+      container.innerHTML = "";
+
+
+      /*
+        入力欄の初期値には、
+        「適用開始日の時点で有効な固定シフト」を表示します。
+
+        つまり、今までの固定をベースに少しだけ変えやすくなります。
+      */
+      const fixed = {};
+
+
+      for (
+        let i = 0;
+        i < 7;
+        i++
+      ) {
+
+        /*
+          その曜日が含まれる直近の日付を作る
+        */
+        const sample =
+          new Date(defaultDate);
+
+
+        while (
+          sample.getDay() !== i
+        ) {
+
+          sample.setDate(
+            sample.getDate() + 1
+          );
+
+        }
+
+
+        fixed[i] =
+          getBaseFixed(
+            fixedEditingUserId,
+            sample
+          )
+          ||
+          {
+            enabled:false,
+            start:"",
+            end:""
+          };
+
+      }
+
+
+      /*
+        日〜土まで7曜日作る
+      */
+      weekNames.forEach(
+        (name, index) => {
+
+          const data =
+            fixed[index]
+            ||
+            {
+              enabled: false,
+              start: "",
+              end: ""
+            };
+
+
+          container.insertAdjacentHTML(
+            "beforeend",
+            `
+              <div class="section">
+
+                <div class="row">
+                  <b>${name}曜日</b>
+                </div>
+
+
+                <div class="time-row">
+                  <input
+                    id="fs${index}"
+                    type="time"
+                    value="${data.enabled ? (data.start || "") : ""}"
+                  >
+
+                  <span>〜</span>
+
+                  <input
+                    id="fe${index}"
+                    type="time"
+                    value="${data.enabled ? (data.end || "") : ""}"
+                  >
+                </div>
+
+
+                <div class="muted" style="margin-top:6px;">
+                  時間を入力して保存すると固定シフトになります。固定なしにしたい曜日は両方空欄にします。
+                </div>
+
+              </div>
+            `
+          );
+
+        }
+      );
+
+
+      document
+        .getElementById("fixedModal")
+        .style.display =
+        "flex";
+
+    }
+
+
+    /*
+      固定シフト保存
+    */
+    function saveFixedSettings() {
+
+      const effectiveFrom =
+        document
+          .getElementById("fixedEffectiveFrom")
+          .value;
+
+
+      if (!effectiveFrom) {
+
+        alert(
+          "いつから変更するか日付を選んでください"
+        );
+
+        return;
+
+      }
+
+
+      const result = {};
+
+
+      /*
+        7曜日分の入力内容をまとめます。
+
+        今回は「固定あり」のチェックは使いません。
+        時間が入力されていれば固定あり、
+        両方空欄なら固定なしです。
+      */
+      for (
+        let i = 0;
+        i < 7;
+        i++
+      ) {
+
+        const start =
+          document
+            .getElementById(
+              "fs" + i
+            )
+            .value;
+
+
+        const end =
+          document
+            .getElementById(
+              "fe" + i
+            )
+            .value;
+
+
+        /*
+          「固定あり」のチェックボックスは使いません。
+
+          ・開始と終了の両方が入っている
+            → 固定シフトあり
+
+          ・開始も終了も空
+            → 固定シフトなし
+
+          ・片方だけ入っている
+            → 入力ミスなので保存しない
+
+          という判定にしています。
+        */
+
+        const hasStart =
+          Boolean(start);
+
+
+        const hasEnd =
+          Boolean(end);
+
+
+        if (
+          hasStart !== hasEnd
+        ) {
+
+          alert(
+            weekNames[i]
+            +
+            "曜日は開始と終了の両方を入力してください"
+          );
+
+          return;
+
+        }
+
+
+        if (
+          hasStart
+          &&
+          start >= end
+        ) {
+
+          alert(
+            weekNames[i]
+            +
+            "曜日の時間を確認してください"
+          );
+
+          return;
+
+        }
+
+
+        const enabled =
+          hasStart &&
+          hasEnd;
+
+
+        result[i] = {
+
+          enabled:
+            enabled,
+
+          start:
+            enabled
+            ? start
+            : "",
+
+          end:
+            enabled
+            ? end
+            : ""
+
+        };
+
+      }
+
+
+      /*
+        このスタッフの変更履歴の箱を作る
+      */
+      fixedShiftVersions[
+        fixedEditingUserId
+      ] ??=
+        [];
+
+
+      /*
+        同じ適用開始日の履歴がすでにある場合は、
+        新しく増やすのではなく上書きします。
+
+        例：
+        10/1からの固定を一度保存
+        ↓
+        やっぱり時間を直す
+        ↓
+        10/1の履歴を更新
+      */
+      const existingIndex =
+        fixedShiftVersions[
+          fixedEditingUserId
+        ]
+        .findIndex(
+          version =>
+          version.effectiveFrom
+          ===
+          effectiveFrom
+        );
+
+
+      const newVersion = {
+
+        effectiveFrom:
+          effectiveFrom,
+
+        weekdays:
+          result
+
+      };
+
+
+      if (
+        existingIndex !== -1
+      ) {
+
+        fixedShiftVersions[
+          fixedEditingUserId
+        ][existingIndex] =
+          newVersion;
+
+      }
+
+      else {
+
+        fixedShiftVersions[
+          fixedEditingUserId
+        ].push(
+          newVersion
+        );
+
+      }
+
+
+      /*
+        日付順に並べて保存
+      */
+      fixedShiftVersions[
+        fixedEditingUserId
+      ].sort(
+        (a, b) =>
+        a.effectiveFrom.localeCompare(
+          b.effectiveFrom
+        )
+      );
+
+
+      save(
+        "shiftAppFixedShiftVersions",
+        fixedShiftVersions
+      );
+
+
+      closeModal(
+        "fixedModal"
+      );
+
+
+      /*
+        管理者画面なら一覧とガントチャートを更新
+      */
+      if (
+        document
+          .getElementById("adminPage")
+          .classList
+          .contains("active")
+      ) {
+
+        renderAdminStaff();
+
+        renderSchedule();
+
+      }
+
+    }
+
+
+    /*
+      ============================================================
+      希望提出
+      ============================================================
+    */
+    function submitMonth() {
+
+      const monthKey =
+        fmtMonth(
+          currentMonth
+        );
+
+
+      /*
+        念のため、提出ボタンを押した瞬間にも
+        要望欄の内容を保存します。
+      */
+      saveMonthlyMessageDraft();
+
+
+      submissions[
+        currentUser.id
+      ] ??=
+        {};
+
+
+      submissions[
+        currentUser.id
+      ][monthKey] =
+        true;
+
+
+      save(
+        "shiftAppSubmissions",
+        submissions
+      );
+
+
+      alert(
+        "希望シフトを提出しました"
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      管理者画面上部の「2026年○月」を更新
+      ============================================================
+
+      ここが今回の大事な修正です。
+
+      以前は adminMonth という1つの変数を、
+
+      ・スタッフ別の「何月の希望を見るか」
+      ・日付/週別の「今どの週を見ているか」
+
+      の両方に使っていました。
+
+      そのため、週表示で月をまたぐと
+      スタッフ別の提出状況まで別の月に変わってしまっていました。
+
+      今回は、
+
+      スタッフ別 → adminMonth
+      日付/週別 → selectedScheduleDate または weekStart
+
+      と、表示元を分けています。
+    */
+    function updateAdminHeaderMonth() {
+
+      let displayDate;
+
+
+      if (
+        currentAdminTab === "schedule"
+      ) {
+
+        /*
+          日付・週別タブでは scheduleMonth を表示します。
+
+          週の月曜日が前月でも、
+          「8月を選んだなら上は8月」と表示できます。
+        */
+        displayDate =
+          scheduleMonth;
+
+      }
+
+      else {
+
+        /*
+          スタッフ別タブの場合
+        */
+        displayDate =
+          adminMonth;
+
+      }
+
+
+      document
+        .getElementById("adminMonthTitle")
+        .textContent =
+        displayDate.getFullYear()
+        +
+        "年 "
+        +
+        (displayDate.getMonth() + 1)
+        +
+        "月";
+
+    }
+
+
+    /*
+      ============================================================
+      管理者タブ切り替え
+      ============================================================
+    */
+    function showAdminTab(type) {
+
+      /*
+        今どちらのタブを見ているか保存
+      */
+      currentAdminTab =
+        type;
+
+
+      document
+        .getElementById("tabStaff")
+        .classList
+        .toggle(
+          "active",
+          type === "staff"
+        );
+
+
+      document
+        .getElementById("tabSchedule")
+        .classList
+        .toggle(
+          "active",
+          type === "schedule"
+        );
+
+
+      document
+        .getElementById("staffView")
+        .style.display =
+        type === "staff"
+        ? "block"
+        : "none";
+
+
+      document
+        .getElementById("scheduleView")
+        .style.display =
+        type === "schedule"
+        ? "block"
+        : "none";
+
+
+      /*
+        タブに応じた年月を上に表示
+      */
+      updateAdminHeaderMonth();
+
+
+      if (
+        type === "schedule"
+      ) {
+
+        renderSchedule();
+
+      }
+
+      else {
+
+        /*
+          スタッフ別に戻った時は、
+          adminMonth の月で提出状況と希望を描画し直します。
+        */
+        renderAdminStaff();
+
+      }
+
+    }
+
+
+    /*
+      ============================================================
+      管理者画面をまとめて更新
+      ============================================================
+    */
+    function renderAdmin() {
+
+      /*
+        上部の年月は今見ているタブに合わせて表示
+      */
+      updateAdminHeaderMonth();
+
+
+      /*
+        スタッフ別は adminMonth を使うので、
+        日付・週別で何月へ移動しても提出状況は勝手に変わりません。
+      */
+      renderAdminStaff();
+
+      renderSchedule();
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：新しいスタッフを登録
+      ============================================================
+
+      管理者画面の
+
+      スタッフ番号
+      名前
+
+      の入力欄から、新しいスタッフを追加します。
+
+      例：
+      スタッフ番号 001
+      名前 山田 花子
+
+      と登録すると、
+
+      users = {
+        "001": {
+          id: "001",
+          name: "山田 花子"
+        }
+      }
+
+      のようなデータになります。
+    */
+    function addStaffByAdmin() {
+
+      /*
+        入力欄から値を取り出す。
+
+        .trim() は、
+        前後に間違って入った空白を消すための処理です。
+      */
+      const id =
+        document
+          .getElementById("newStaffId")
+          .value
+          .trim();
+
+
+      const name =
+        document
+          .getElementById("newStaffName")
+          .value
+          .trim();
+
+
+      /*
+        どちらかが空欄なら登録しない
+      */
+      if (
+        !id ||
+        !name
+      ) {
+
+        alert(
+          "スタッフ番号と名前を入力してください"
+        );
+
+        return;
+
+      }
+
+
+      /*
+        同じスタッフ番号がすでに使われている場合。
+
+        スタッフ番号は1人につき1つにしたいので、
+        重複登録を防ぎます。
+      */
+      if (users[id]) {
+
+        alert(
+          "そのスタッフ番号はすでに登録されています。"
+        );
+
+        return;
+
+      }
+
+
+      /*
+        users の中に新しいスタッフを追加
+      */
+      users[id] = {
+        id: id,
+        name: name
+      };
+
+
+      /*
+        localStorageにも保存する。
+
+        これをしないとページを閉じた時に消えてしまいます。
+      */
+      save(
+        "shiftAppUsers",
+        users
+      );
+
+
+      /*
+        このスタッフ用の空データも用意しておく
+      */
+      allShiftData[id] ??= {};
+      allFixedShifts[id] ??= {};
+      fixedShiftVersions[id] ??= [];
+      irregularFixedShifts[id] ??= {};
+      monthlyMessages[id] ??= {};
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      save(
+        "shiftAppFixedShifts",
+        allFixedShifts
+      );
+
+
+      save(
+        "shiftAppFixedShiftVersions",
+        fixedShiftVersions
+      );
+
+
+      save(
+        "shiftAppIrregularFixedShifts",
+        irregularFixedShifts
+      );
+
+
+      save(
+        "shiftAppMonthlyMessages",
+        monthlyMessages
+      );
+
+
+      /*
+        登録が終わったら入力欄を空にする
+      */
+      document
+        .getElementById("newStaffId")
+        .value =
+        "";
+
+
+      document
+        .getElementById("newStaffName")
+        .value =
+        "";
+
+
+      alert(
+        name
+        +
+        " さんを登録しました。"
+      );
+
+
+      /*
+        スタッフ一覧を最新状態に更新
+      */
+      renderAdminStaff();
+
+      /*
+        日付別・週別ガントチャートにも
+        新しいスタッフが表示されるよう更新
+      */
+      renderSchedule();
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：スタッフ別一覧
+      ============================================================
+
+      ここで、
+
+      ・提出済み
+      ・固定シフト
+      ・希望
+      ・固定シフト編集
+      ・データリセット
+      ・スタッフ削除
+
+      を表示します。
+    */
+    function renderAdminStaff() {
+
+      const container =
+        document
+          .getElementById("adminStaffList");
+
+
+      const monthKey =
+        fmtMonth(
+          adminMonth
+        );
+
+
+      container.innerHTML = "";
+
+
+      const userIds =
+        Object.keys(users);
+
+
+      if (
+        userIds.length === 0
+      ) {
+
+        container.innerHTML =
+        `
+          <div class="admin-card">
+            まだスタッフが登録されていません。
+          </div>
+        `;
+
+        return;
+
+      }
+
+
+      userIds.forEach(
+        userId => {
+
+          const user =
+            users[userId];
+
+
+          const fixedData =
+            allFixedShifts[userId]
+            ||
+            {};
+
+
+          const shiftData =
+            allShiftData[userId]
+            ||
+            {};
+
+
+          const submitted =
+            submissions[userId]
+            &&
+            submissions[userId][monthKey];
+
+
+          /*
+            固定シフトの文章を作る
+          */
+          let fixedText = "";
+
+
+          for (
+            let i = 0;
+            i < 7;
+            i++
+          ) {
+
+            if (
+              fixedData[i]
+              &&
+              fixedData[i].enabled
+            ) {
+
+              fixedText +=
+                weekNames[i]
+                +
+                " "
+                +
+                fixedData[i].start
+                +
+                "〜"
+                +
+                fixedData[i].end
+                +
+                "<br>";
+
+            }
+
+          }
+
+
+          if (!fixedText) {
+
+            fixedText =
+              "固定なし";
+
+          }
+
+
+          /*
+            「いつから固定が変わったか」の履歴を表示する文章。
+
+            変更履歴がなければ、
+            「変更履歴なし」と表示します。
+          */
+          const versions =
+            fixedShiftVersions[userId]
+            ||
+            [];
+
+
+          let fixedHistoryText =
+            "";
+
+
+          if (
+            versions.length === 0
+          ) {
+
+            fixedHistoryText =
+              "変更履歴なし";
+
+          }
+
+          else {
+
+            versions
+              .slice()
+              .sort(
+                (a, b) =>
+                a.effectiveFrom.localeCompare(
+                  b.effectiveFrom
+                )
+              )
+              .forEach(
+                version => {
+
+                  fixedHistoryText +=
+                    "<strong>"
+                    +
+                    version.effectiveFrom
+                    +
+                    " から</strong><br>";
+
+
+                  let hasAny =
+                    false;
+
+
+                  for (
+                    let i = 0;
+                    i < 7;
+                    i++
+                  ) {
+
+                    const f =
+                      version.weekdays[i];
+
+
+                    if (
+                      f &&
+                      f.enabled
+                    ) {
+
+                      hasAny =
+                        true;
+
+
+                      fixedHistoryText +=
+                        weekNames[i]
+                        +
+                        " "
+                        +
+                        f.start
+                        +
+                        "〜"
+                        +
+                        f.end
+                        +
+                        "<br>";
+
+                    }
+
+                  }
+
+
+                  if (!hasAny) {
+
+                    fixedHistoryText +=
+                      "固定なし<br>";
+
+                  }
+
+
+                  fixedHistoryText +=
+                    "<br>";
+
+                }
+              );
+
+          }
+
+
+          /*
+            今月の希望一覧を作る
+          */
+          const hopes =
+            Object
+              .keys(
+                shiftData
+              )
+              .filter(
+                key =>
+                key.slice(0, 7)
+                ===
+                monthKey
+              )
+              .sort()
+              .map(
+                key => {
+
+                  const data =
+                    shiftData[key];
+
+
+                  let text =
+                    key.slice(5)
+                    +
+                    "：";
+
+
+                  if (
+                    data.type === "off"
+                  ) {
+
+                    text +=
+                      "希望休";
+
+                  }
+
+                  else {
+
+                    text +=
+                      data.available1.start
+                      +
+                      "〜"
+                      +
+                      data.available1.end;
+
+
+                    if (
+                      data.available2
+                    ) {
+
+                      text +=
+                        " / "
+                        +
+                        data.available2.start
+                        +
+                        "〜"
+                        +
+                        data.available2.end;
+
+                    }
+
+                  }
+
+
+                  if (
+                    data.editedBy === "admin"
+                  ) {
+
+                    text +=
+                      " <span class='admin-edited'>管理者更新</span>";
+
+                  }
+
+
+                  return text;
+
+                }
+              )
+              .join("<br>")
+            ||
+            "希望入力なし";
+
+
+          /*
+            1人分のカードを追加
+          */
+          container.insertAdjacentHTML(
+            "beforeend",
+            `
+              <div class="admin-card">
+
+                <b>${user.name}</b>
+
+                <div class="muted">
+                  スタッフ番号：${user.id}
+                </div>
+
+
+                <span
+                  class="
+                    badge
+                    ${
+                      submitted
+                      ? "ok"
+                      : "no"
+                    }
+                  "
+                >
+                  ${
+                    submitted
+                    ? "✓ 提出済み"
+                    : "未提出"
+                  }
+                </span>
+
+
+                <h4 style="margin-top:14px;">
+                  固定シフト
+                </h4>
+
+                <div>
+                  ${fixedText}
+                </div>
+
+
+                <div class="fixed-history">
+                  <b>固定シフト変更履歴</b><br>
+                  ${fixedHistoryText}
+                </div>
+
+
+                <div class="staff-actions">
+
+                  <button
+                    class="edit-button"
+                    onclick="openFixedForAdmin('${userId}')"
+                  >
+                    固定シフトを変更
+                  </button>
+
+
+                  <button
+                    class="reset-button"
+                    onclick="resetStaffShiftData('${userId}')"
+                  >
+                    シフトデータをリセット
+                  </button>
+
+
+                  <button
+                    class="delete-button"
+                    onclick="deleteStaff('${userId}')"
+                  >
+                    スタッフ登録を削除
+                  </button>
+
+                </div>
+
+
+                <h4 style="margin-top:16px;">
+                  今月の希望
+                </h4>
+
+                <div>
+                  ${hopes}
+                </div>
+
+
+                <h4 style="margin-top:16px;">
+                  要望・伝えたいこと
+                </h4>
+
+                <div
+                  style="
+                    background:#fff8e8;
+                    border-radius:8px;
+                    padding:10px;
+                    white-space:pre-wrap;
+                  "
+                >
+                  ${
+                    (
+                      monthlyMessages[userId]
+                      &&
+                      monthlyMessages[userId][monthKey]
+                    )
+                    ?
+                    monthlyMessages[userId][monthKey]
+                    :
+                    "特になし"
+                  }
+                </div>
+
+              </div>
+            `
+          );
+
+        }
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフの「シフトデータだけ」リセット
+      ============================================================
+
+      スタッフ番号と名前は残します。
+
+      消すもの：
+      ・希望
+      ・固定
+      ・固定シフトの変更履歴
+      ・その日だけのイレギュラー固定
+      ・提出済み
+      ・確定シフト
+      ・要望 / 伝えたいこと
+
+      「人は残したいけど最初からシフトを入れ直したい」
+      ときに使います。
+    */
+    function resetStaffShiftData(userId) {
+
+      const user =
+        users[userId];
+
+
+      const ok =
+        confirm(
+          user.name
+          +
+          " さんの\n"
+          +
+          "希望・固定・提出状況・確定シフトをすべてリセットします。\n\n"
+          +
+          "スタッフ番号と名前は残ります。\n\n"
+          +
+          "よろしいですか？"
+        );
+
+
+      if (!ok) {
+        return;
+      }
+
+
+      delete allShiftData[userId];
+      delete allFixedShifts[userId];
+      delete fixedShiftVersions[userId];
+      delete irregularFixedShifts[userId];
+      delete submissions[userId];
+      delete confirmedShifts[userId];
+      delete monthlyMessages[userId];
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      save(
+        "shiftAppFixedShifts",
+        allFixedShifts
+      );
+
+
+      save(
+        "shiftAppFixedShiftVersions",
+        fixedShiftVersions
+      );
+
+
+      save(
+        "shiftAppIrregularFixedShifts",
+        irregularFixedShifts
+      );
+
+
+      save(
+        "shiftAppSubmissions",
+        submissions
+      );
+
+
+      save(
+        "shiftAppConfirmed",
+        confirmedShifts
+      );
+
+
+      save(
+        "shiftAppMonthlyMessages",
+        monthlyMessages
+      );
+
+
+      renderAdmin();
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフ登録そのものを削除
+      ============================================================
+
+      これはスタッフ番号も名前も消します。
+
+      退職者などに使う想定です。
+
+      同じスタッフ番号は、
+      削除後なら管理者がもう一度登録できます。
+    */
+    function deleteStaff(userId) {
+
+      const user =
+        users[userId];
+
+
+      const ok =
+        confirm(
+          user.name
+          +
+          " さんをスタッフ一覧から削除します。\n\n"
+          +
+          "スタッフ番号・希望・固定・確定シフトもすべて消えます。\n\n"
+          +
+          "この操作は元に戻せません。\n"
+          +
+          "本当に削除しますか？"
+        );
+
+
+      if (!ok) {
+        return;
+      }
+
+
+      delete users[userId];
+      delete allShiftData[userId];
+      delete allFixedShifts[userId];
+      delete fixedShiftVersions[userId];
+      delete irregularFixedShifts[userId];
+      delete submissions[userId];
+      delete confirmedShifts[userId];
+      delete monthlyMessages[userId];
+
+
+      save(
+        "shiftAppUsers",
+        users
+      );
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      save(
+        "shiftAppFixedShifts",
+        allFixedShifts
+      );
+
+
+      save(
+        "shiftAppFixedShiftVersions",
+        fixedShiftVersions
+      );
+
+
+      save(
+        "shiftAppIrregularFixedShifts",
+        irregularFixedShifts
+      );
+
+
+      save(
+        "shiftAppSubmissions",
+        submissions
+      );
+
+
+      save(
+        "shiftAppConfirmed",
+        confirmedShifts
+      );
+
+
+      save(
+        "shiftAppMonthlyMessages",
+        monthlyMessages
+      );
+
+
+      renderAdmin();
+
+    }
+
+
+    /*
+      ============================================================
+      1日表示 / 1週間表示の切り替え
+      ============================================================
+    */
+    function setScheduleMode(mode) {
+
+      scheduleMode = mode;
+
+
+      document
+        .getElementById("singleBtn")
+        .classList
+        .toggle(
+          "active",
+          mode === "single"
+        );
+
+
+      document
+        .getElementById("weekBtn")
+        .classList
+        .toggle(
+          "active",
+          mode === "week"
+        );
+
+
+      /*
+        表示モードを切り替えた時も、
+        現在見ている内容に合わせて表示月をそろえます。
+      */
+      if (
+        mode === "single"
+      ) {
+
+        scheduleMonth =
+          new Date(
+            selectedScheduleDate.getFullYear(),
+            selectedScheduleDate.getMonth(),
+            1
+          );
+
+      }
+
+      else {
+
+        /*
+          週表示へ切り替える時は、
+          現在の1日表示の日付が含まれる週を表示します。
+        */
+        scheduleMonth =
+          new Date(
+            selectedScheduleDate.getFullYear(),
+            selectedScheduleDate.getMonth(),
+            1
+          );
+
+
+        weekStart =
+          getMonday(
+            selectedScheduleDate
+          );
+
+      }
+
+
+      updateAdminHeaderMonth();
+
+
+      renderSchedule();
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：シフト作成画面
+      ============================================================
+    */
+    function renderSchedule() {
+
+      const area =
+        document
+          .getElementById("scheduleArea");
+
+
+      if (!area) {
+        return;
+      }
+
+
+      area.innerHTML = "";
+
+
+      /*
+        1日表示
+      */
+      if (
+        scheduleMode === "single"
+      ) {
+
+        area.innerHTML =
+        `
+          <div class="week-nav">
+
+            <button
+              class="circle"
+              onclick="moveSingle(-1)"
+            >
+              ‹
+            </button>
+
+            <strong>
+              ${selectedScheduleDate.getMonth() + 1}
+              /
+              ${selectedScheduleDate.getDate()}
+              （
+              ${weekNames[selectedScheduleDate.getDay()]}
+              ）
+            </strong>
+
+            <button
+              class="circle"
+              onclick="moveSingle(1)"
+            >
+              ›
+            </button>
+
+          </div>
+        `;
+
+
+        area.appendChild(
+          makeGanttDay(
+            selectedScheduleDate
+          )
+        );
+
+      }
+
+
+      /*
+        1週間表示
+
+        月ボタンで移動した直後は、
+        その月の1日が含まれる週の月曜日から表示されます。
+
+        例：
+        2026年8月
+        → 7/27(月)〜8/2(日) から表示
+      */
+      else {
+
+        const end =
+          new Date(
+            weekStart
+          );
+
+
+        end.setDate(
+          end.getDate() + 6
+        );
+
+
+        area.innerHTML =
+        `
+          <div class="week-nav">
+
+            <button
+              class="circle"
+              onclick="moveWeek(-7)"
+            >
+              ‹
+            </button>
+
+            <strong>
+              ${weekStart.getMonth() + 1}
+              /
+              ${weekStart.getDate()}
+              〜
+              ${end.getMonth() + 1}
+              /
+              ${end.getDate()}
+            </strong>
+
+            <button
+              class="circle"
+              onclick="moveWeek(7)"
+            >
+              ›
+            </button>
+
+          </div>
+        `;
+
+
+        /*
+          月曜日から7日分
+        */
+        for (
+          let i = 0;
+          i < 7;
+          i++
+        ) {
+
+          const date =
+            new Date(
+              weekStart
+            );
+
+
+          date.setDate(
+            date.getDate() + i
+          );
+
+
+          area.appendChild(
+            makeGanttDay(date)
+          );
+
+        }
+
+      }
+
+    }
+
+
+    /*
+      1日ずつ前後
+    */
+    function moveSingle(move) {
+
+      selectedScheduleDate.setDate(
+        selectedScheduleDate.getDate()
+        +
+        move
+      );
+
+
+      /*
+        selectedScheduleDate は
+        「日付・週別タブの表示日」専用です。
+
+        日付を前後して月をまたいだ時は、
+        日付・週別タブの表示月 scheduleMonth だけを更新します。
+
+        スタッフ別タブ用の adminMonth は変更しません。
+      */
+      scheduleMonth =
+        new Date(
+          selectedScheduleDate.getFullYear(),
+          selectedScheduleDate.getMonth(),
+          1
+        );
+
+
+      updateAdminHeaderMonth();
+
+
+      renderSchedule();
+
+    }
+
+
+    /*
+      1週間ずつ前後
+    */
+    function moveWeek(move) {
+
+      weekStart.setDate(
+        weekStart.getDate()
+        +
+        move
+      );
+
+
+      /*
+        週の左右矢印で前後した時は、
+        その週の月曜日が属する月を
+        日付・週別タブの表示月にします。
+
+        例：
+        8/3〜8/9
+        ↓ 前の週へ
+        7/27〜8/2
+
+        この操作なら上部も「2026年7月」になります。
+
+        ※ スタッフ別用の adminMonth は変更しません。
+      */
+      scheduleMonth =
+        new Date(
+          weekStart.getFullYear(),
+          weekStart.getMonth(),
+          1
+        );
+
+
+      updateAdminHeaderMonth();
+
+
+      /*
+        固定シフトは、
+        週の月ではなく各日付ごとに判定します。
+
+        8/31〜9/6 の場合：
+
+        8/31 → 8/31時点の固定
+        9/1  → 9/1時点の固定
+      */
+      renderSchedule();
+
+    }
+
+
+    /*
+      ============================================================
+      "13:30" を「何分か」に変換
+      ============================================================
+
+      13:30
+      ↓
+      13×60 + 30
+      ↓
+      810
+    */
+    function timeMin(time) {
+
+      if (!time) {
+        return null;
+      }
+
+
+      const [
+        hour,
+        minute
+      ] =
+        time
+          .split(":")
+          .map(Number);
+
+
+      return (
+        hour * 60
+        +
+        minute
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      「分」を "14:30" の形に戻す
+      ============================================================
+
+      例：
+      870分
+      ↓
+      14:30
+
+      希望時間から固定時間を切り抜く時に使います。
+    */
+    function minToTime(minutes) {
+
+      const hour =
+        Math.floor(
+          minutes / 60
+        );
+
+
+      const minute =
+        minutes % 60;
+
+
+      return (
+        String(hour).padStart(2, "0")
+        +
+        ":"
+        +
+        String(minute).padStart(2, "0")
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      希望時間から固定時間の重なり部分を取り除く
+      ============================================================
+
+      これが今回の修正の中心です。
+
+      以前は、
+
+      希望 12:00〜22:00
+      固定 14:00〜20:00
+
+      の2本を「重ねて表示」していました。
+
+      その方法だと、
+      CSSの重なり順や透明度の影響で
+      青が見えなくなることがありました。
+
+      今回は重ねません。
+
+      最初から希望を、
+
+      12:00〜14:00
+      20:00〜22:00
+
+      の2本に分割して表示します。
+
+      そして中央に
+
+      14:00〜20:00 の固定（青）
+
+      を表示します。
+
+      つまり、同じ場所に青と緑が存在しないので、
+      確実に希望＝緑、固定＝青になります。
+    */
+    function subtractFixedFromHope(
+      hopeRange,
+      fixed
+    ) {
+
+      /*
+        固定がない場合は
+        希望をそのまま返します。
+      */
+      if (
+        !fixed
+        ||
+        !fixed.enabled
+      ) {
+
+        return [
+          hopeRange
+        ];
+
+      }
+
+
+      const hopeStart =
+        timeMin(
+          hopeRange.start
+        );
+
+
+      const hopeEnd =
+        timeMin(
+          hopeRange.end
+        );
+
+
+      const fixedStart =
+        timeMin(
+          fixed.start
+        );
+
+
+      const fixedEnd =
+        timeMin(
+          fixed.end
+        );
+
+
+      /*
+        時間データがおかしい場合は、
+        希望をそのまま表示します。
+      */
+      if (
+        hopeStart === null
+        ||
+        hopeEnd === null
+        ||
+        fixedStart === null
+        ||
+        fixedEnd === null
+      ) {
+
+        return [
+          hopeRange
+        ];
+
+      }
+
+
+      /*
+        全く重なっていない場合。
+
+        例：
+        希望 12:00〜14:00
+        固定 17:00〜20:00
+      */
+      if (
+        fixedEnd <= hopeStart
+        ||
+        fixedStart >= hopeEnd
+      ) {
+
+        return [
+          hopeRange
+        ];
+
+      }
+
+
+      /*
+        ここからは重なっている場合。
+
+        残った希望部分を入れる配列です。
+      */
+      const result = [];
+
+
+      /*
+        固定より前に希望が残る場合。
+
+        例：
+        希望 12:00〜22:00
+        固定 14:00〜20:00
+
+        → 12:00〜14:00 を追加
+      */
+      if (
+        hopeStart < fixedStart
+      ) {
+
+        result.push({
+          start:
+            minToTime(
+              hopeStart
+            ),
+
+          end:
+            minToTime(
+              Math.min(
+                fixedStart,
+                hopeEnd
+              )
+            )
+        });
+
+      }
+
+
+      /*
+        固定より後ろに希望が残る場合。
+
+        → 20:00〜22:00 を追加
+      */
+      if (
+        hopeEnd > fixedEnd
+      ) {
+
+        result.push({
+          start:
+            minToTime(
+              Math.max(
+                fixedEnd,
+                hopeStart
+              )
+            ),
+
+          end:
+            minToTime(
+              hopeEnd
+            )
+        });
+
+      }
+
+
+      return result;
+
+    }
+
+
+    /*
+      ============================================================
+      バーの位置を計算
+      ============================================================
+
+      ガントチャートは
+
+      12:00 = 左端
+      22:00 = 右端
+
+      です。
+
+      例えば 17:00 はちょうど真ん中付近になります。
+    */
+    function barPos(start, end) {
+
+      const chartStart =
+        12 * 60;
+
+
+      const chartEnd =
+        22 * 60;
+
+
+      let startMinutes =
+        Math.max(
+          timeMin(start),
+          chartStart
+        );
+
+
+      let endMinutes =
+        Math.min(
+          timeMin(end),
+          chartEnd
+        );
+
+
+      if (
+        !Number.isFinite(startMinutes)
+        ||
+        !Number.isFinite(endMinutes)
+        ||
+        endMinutes <= startMinutes
+      ) {
+
+        return null;
+
+      }
+
+
+      return {
+
+        left:
+          (
+            startMinutes
+            -
+            chartStart
+          )
+          /
+          (
+            chartEnd
+            -
+            chartStart
+          )
+          *
+          100,
+
+        width:
+          (
+            endMinutes
+            -
+            startMinutes
+          )
+          /
+          (
+            chartEnd
+            -
+            chartStart
+          )
+          *
+          100
+
+      };
+
+    }
+
+
+    /*
+      ============================================================
+      30分マス番号 → 時刻
+      ============================================================
+
+      0  → 12:00
+      1  → 12:30
+      2  → 13:00
+      ...
+      20 → 22:00
+    */
+    function slotTime(index) {
+
+      const minutes =
+        12 * 60
+        +
+        index * 30;
+
+
+      const hour =
+        Math.floor(
+          minutes / 60
+        );
+
+
+      const minute =
+        minutes % 60;
+
+
+      return (
+        String(hour).padStart(2, "0")
+        +
+        ":"
+        +
+        String(minute).padStart(2, "0")
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      1日分のガントチャートを作る
+      ============================================================
+    */
+    function makeGanttDay(date) {
+
+      const wrapper =
+        document
+          .createElement("div");
+
+
+      wrapper.className =
+        "gantt-day";
+
+
+      wrapper.insertAdjacentHTML(
+        "beforeend",
+        `
+          <div class="day-title">
+            ${date.getMonth() + 1}
+            /
+            ${date.getDate()}
+            （
+            ${weekNames[date.getDay()]}
+            ）
+          </div>
+        `
+      );
+
+
+      const scroll =
+        document
+          .createElement("div");
+
+
+      scroll.className =
+        "gantt-scroll";
+
+
+      const gantt =
+        document
+          .createElement("div");
+
+
+      gantt.className =
+        "gantt";
+
+
+      /*
+        時間ヘッダー
+      */
+      let header =
+      `
+        <div class="gantt-head">
+
+          <div class="name-col">
+            <b>スタッフ</b>
+          </div>
+
+          <div class="timeline">
+      `;
+
+
+      for (
+        let hour = 12;
+        hour <= 22;
+        hour++
+      ) {
+
+        header +=
+        `
+          <div
+            class="hour-label"
+            style="
+              left:
+              ${
+                (hour - 12)
+                /
+                10
+                *
+                100
+              }%;
+            "
+          >
+            ${hour}:00
+          </div>
+        `;
+
+      }
+
+
+      header +=
+      `
+          </div>
+        </div>
+      `;
+
+
+      gantt.insertAdjacentHTML(
+        "beforeend",
+        header
+      );
+
+
+      const dateKey =
+        fmtDate(date);
+
+
+      /*
+        スタッフ1人ずつ1行作る
+      */
+      Object
+        .keys(users)
+        .forEach(
+          userId => {
+
+            const user =
+              users[userId];
+
+
+            const data =
+              (
+                allShiftData[userId]
+                ||
+                {}
+              )[dateKey];
+
+
+            /*
+              固定シフトは「この日そのものの日付」で取得します。
+
+              これが大事です。
+
+              例：
+              週表示が 8/31(月)〜9/6(日) でも、
+
+              8/31は8/31時点の固定
+              9/1は9/1時点の固定
+
+              を別々に取得します。
+
+              そのため「9/1から固定変更」の場合でも、
+              9/1以降だけ新しい固定が表示されます。
+            */
+            const fixed =
+              getFixed(
+                userId,
+                date
+              );
+
+
+            const confirmed =
+              (
+                (
+                  confirmedShifts[userId]
+                  ||
+                  {}
+                )[dateKey]
+                ||
+                []
+              );
+
+
+            const row =
+              document
+                .createElement("div");
+
+
+            row.className =
+              "gantt-row";
+
+
+            row.innerHTML =
+            `
+              <div class="name-col">
+
+                <b>${user.name}</b>
+
+                <div class="muted">
+                  ${userId}
+                </div>
+
+                <div class="mini-action-row">
+
+                  <button class="mini-hope edit-hope-button">
+                    希望を変更
+                  </button>
+
+                  <button class="mini-fixed irregular-fixed-button">
+                    この日の固定
+                  </button>
+
+                </div>
+
+              </div>
+
+              <div class="timeline">
+              </div>
+            `;
+
+
+            /*
+              希望変更ボタン
+            */
+            row
+              .querySelector(
+                ".edit-hope-button"
+              )
+              .onclick =
+              () =>
+              openAdminEdit(
+                userId,
+                date
+              );
+
+
+            /*
+              「この日の固定」を押すと、
+              管理者がその日だけの固定を変更できます。
+            */
+            row
+              .querySelector(
+                ".irregular-fixed-button"
+              )
+              .onclick =
+              () =>
+              openIrregularFixedEditor(
+                userId,
+                date
+              );
+
+
+            const timeline =
+              row
+                .querySelector(
+                  ".timeline"
+                );
+
+
+            /*
+              固定バー
+            */
+            if (
+              fixed &&
+              fixed.enabled
+            ) {
+
+              const pos =
+                barPos(
+                  fixed.start,
+                  fixed.end
+                );
+
+
+              if (pos) {
+
+                timeline.insertAdjacentHTML(
+                  "beforeend",
+                  `
+                    <div
+                      class="
+                        bar
+                        bar-fixed
+                      "
+                      style="
+                        left:${pos.left}%;
+                        width:${pos.width}%;
+                      "
+                    >
+                    </div>
+                  `
+                );
+
+              }
+
+            }
+
+
+            /*
+              希望
+            */
+            if (data) {
+
+              /*
+                希望休
+              */
+              if (
+                data.type === "off"
+              ) {
+
+                timeline.insertAdjacentHTML(
+                  "beforeend",
+                  `
+                    <div class="off-label">
+                      希望休
+                    </div>
+                  `
+                );
+
+              }
+
+
+              /*
+                出勤可能
+              */
+              else {
+
+                [
+                  data.available1,
+                  data.available2
+                ]
+                .filter(Boolean)
+                .forEach(
+                  range => {
+
+                    /*
+                      希望と固定が重なっていたら、
+                      希望から固定部分を切り抜きます。
+
+                      例：
+
+                      希望 12:00〜22:00
+                      固定 14:00〜20:00
+
+                      ↓
+
+                      希望として描くのは
+
+                      12:00〜14:00
+                      20:00〜22:00
+
+                      の2か所だけです。
+                    */
+                    const visibleHopeRanges =
+                      subtractFixedFromHope(
+                        range,
+                        fixed
+                      );
+
+
+                    visibleHopeRanges
+                      .forEach(
+                        visibleRange => {
+
+                          const pos =
+                            barPos(
+                              visibleRange.start,
+                              visibleRange.end
+                            );
+
+
+                          if (pos) {
+
+                            timeline.insertAdjacentHTML(
+                              "beforeend",
+                              `
+                                <div
+                                  class="
+                                    bar
+                                    bar-hope
+                                  "
+                                  style="
+                                    left:${pos.left}%;
+                                    width:${pos.width}%;
+                                  "
+                                >
+                                </div>
+                              `
+                            );
+
+                          }
+
+                        }
+                      );
+
+                  }
+                );
+
+              }
+
+            }
+
+
+            /*
+              30分刻みで20マス作る
+            */
+            for (
+              let slot = 0;
+              slot < 20;
+              slot++
+            ) {
+
+              const button =
+                document
+                  .createElement("button");
+
+
+              button.className =
+                "slot"
+                +
+                (
+                  confirmed.includes(slot)
+                  ? " confirmed"
+                  : ""
+                );
+
+
+              /*
+                1マス40pxなので、
+                slot番号 × 40px の位置に置く
+              */
+              button.style.left =
+                slot * 40
+                +
+                "px";
+
+
+              /*
+                data-○○ に情報を持たせる
+              */
+              button.dataset.uid =
+                userId;
+
+
+              button.dataset.date =
+                dateKey;
+
+
+              button.dataset.slot =
+                slot;
+
+
+              button.title =
+                slotTime(slot)
+                +
+                "〜"
+                +
+                slotTime(slot + 1);
+
+
+              /*
+                クリック・ドラッグ機能を付ける
+              */
+              attachSlotEvents(
+                button
+              );
+
+
+              timeline.appendChild(
+                button
+              );
+
+            }
+
+
+            gantt.appendChild(
+              row
+            );
+
+          }
+        );
+
+
+      scroll.appendChild(
+        gantt
+      );
+
+
+      wrapper.appendChild(
+        scroll
+      );
+
+
+      return wrapper;
+
+    }
+
+
+    /*
+      ============================================================
+      クリック＋ドラッグ
+      ============================================================
+
+      pointer イベントを使うことで、
+
+      ・Macのマウス
+      ・iPhone / Androidのタッチ
+
+      の両方に同じコードで対応します。
+    */
+
+    let dragState = null;
+
+
+    /*
+      各30分マスにイベントを付ける
+    */
+    function attachSlotEvents(element) {
+
+      /*
+        押した瞬間
+      */
+      element.addEventListener(
+        "pointerdown",
+        event => {
+
+          event.preventDefault();
+
+
+          const userId =
+            element.dataset.uid;
+
+
+          const dateKey =
+            element.dataset.date;
+
+
+          const slot =
+            Number(
+              element.dataset.slot
+            );
+
+
+          const existing =
+            (
+              (
+                confirmedShifts[userId]
+                ||
+                {}
+              )[dateKey]
+              ||
+              []
+            );
+
+
+          /*
+            押し始めたマスが
+
+            空 → 追加モード
+            オレンジ → 削除モード
+
+            になります。
+          */
+          dragState = {
+
+            mode:
+              existing.includes(slot)
+              ? "remove"
+              : "add",
+
+            /*
+              同じマスを何度も処理しないための記録
+            */
+            visited:
+              new Set()
+
+          };
+
+
+          element
+            .setPointerCapture?.(
+              event.pointerId
+            );
+
+
+          applyDragSlot(
+            element
+          );
+
+        }
+      );
+
+
+      /*
+        マウスで別マスに入った時
+      */
+      element.addEventListener(
+        "pointerenter",
+        event => {
+
+          if (
+            dragState
+            &&
+            event.buttons !== 0
+          ) {
+
+            applyDragSlot(
+              element
+            );
+
+          }
+
+        }
+      );
+
+
+      /*
+        スマホで指を横に動かした時
+      */
+      element.addEventListener(
+        "pointermove",
+        event => {
+
+          if (!dragState) {
+            return;
+          }
+
+
+          const target =
+            document
+              .elementFromPoint(
+                event.clientX,
+                event.clientY
+              );
+
+
+          if (
+            target
+            &&
+            target.classList
+            &&
+            target.classList.contains("slot")
+          ) {
+
+            applyDragSlot(
+              target
+            );
+
+          }
+
+        }
+      );
+
+
+      /*
+        指 / マウスを離したら終了
+      */
+      element.addEventListener(
+        "pointerup",
+        finishDrag
+      );
+
+
+      element.addEventListener(
+        "pointercancel",
+        finishDrag
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      ドラッグ中の1マス処理
+      ============================================================
+
+      ※ 以前あった
+      「希望時間外ですが大丈夫ですか？」
+      の確認ポップアップは削除しています。
+
+      視覚的に希望範囲が見えているので、
+      管理者判断でそのまま確定できます。
+    */
+    function applyDragSlot(element) {
+
+      if (!dragState) {
+        return;
+      }
+
+
+      /*
+        そのマスを一意に表す文字列
+      */
+      const uniqueKey =
+        element.dataset.uid
+        +
+        "|"
+        +
+        element.dataset.date
+        +
+        "|"
+        +
+        element.dataset.slot;
+
+
+      /*
+        同じドラッグ中に
+        同じマスを2回処理しない
+      */
+      if (
+        dragState.visited.has(
+          uniqueKey
+        )
+      ) {
+
+        return;
+
+      }
+
+
+      dragState.visited.add(
+        uniqueKey
+      );
+
+
+      const userId =
+        element.dataset.uid;
+
+
+      const dateKey =
+        element.dataset.date;
+
+
+      const slot =
+        Number(
+          element.dataset.slot
+        );
+
+
+      /*
+        データの箱がなければ作る
+      */
+      confirmedShifts[userId] ??= {};
+
+      confirmedShifts[userId][dateKey] ??= [];
+
+
+      const slots =
+        confirmedShifts[userId][dateKey];
+
+
+      const index =
+        slots.indexOf(slot);
+
+
+      /*
+        追加モード
+      */
+      if (
+        dragState.mode === "add"
+        &&
+        index === -1
+      ) {
+
+        /*
+          希望時間外でもそのまま追加。
+          ポップアップは出しません。
+        */
+        slots.push(slot);
+
+
+        /*
+          0,1,2...の順に並べる
+        */
+        slots.sort(
+          (a, b) => a - b
+        );
+
+
+        /*
+          見た目をオレンジにする
+        */
+        element
+          .classList
+          .add("confirmed");
+
+      }
+
+
+      /*
+        削除モード
+      */
+      else if (
+        dragState.mode === "remove"
+        &&
+        index !== -1
+      ) {
+
+        /*
+          配列から1つ消す
+        */
+        slots.splice(
+          index,
+          1
+        );
+
+
+        element
+          .classList
+          .remove("confirmed");
+
+      }
+
+
+      save(
+        "shiftAppConfirmed",
+        confirmedShifts
+      );
+
+    }
+
+
+    /*
+      ドラッグ終了
+    */
+    function finishDrag() {
+
+      dragState = null;
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：その日だけのイレギュラー固定を編集
+      ============================================================
+    */
+
+    function openIrregularFixedEditor(userId, date) {
+
+      irregularFixedEditingUserId =
+        userId;
+
+
+      irregularFixedEditingDateKey =
+        fmtDate(date);
+
+
+      const user =
+        users[userId];
+
+
+      document
+        .getElementById("irregularFixedTitle")
+        .textContent =
+        user.name
+        +
+        "｜"
+        +
+        (date.getMonth() + 1)
+        +
+        "/"
+        +
+        date.getDate()
+        +
+        " の固定シフト";
+
+
+      /*
+        すでにイレギュラー固定が保存されていればそれを使う。
+
+        なければ、
+        その日の通常固定を初期値として表示します。
+      */
+      const existing =
+        (
+          irregularFixedShifts[userId]
+          ||
+          {}
+        )[
+          irregularFixedEditingDateKey
+        ];
+
+
+      const normalFixed =
+        getBaseFixed(
+          userId,
+          date
+        );
+
+
+      if (existing) {
+
+        irregularFixedEditingType =
+          existing.enabled
+          ? "on"
+          : "off";
+
+
+        document
+          .getElementById("irregularFixedStart")
+          .value =
+          existing.enabled
+          ? existing.start
+          : "";
+
+
+        document
+          .getElementById("irregularFixedEnd")
+          .value =
+          existing.enabled
+          ? existing.end
+          : "";
+
+      }
+
+      else {
+
+        irregularFixedEditingType =
+          "on";
+
+
+        document
+          .getElementById("irregularFixedStart")
+          .value =
+          normalFixed
+          &&
+          normalFixed.enabled
+          ? normalFixed.start
+          : "";
+
+
+        document
+          .getElementById("irregularFixedEnd")
+          .value =
+          normalFixed
+          &&
+          normalFixed.enabled
+          ? normalFixed.end
+          : "";
+
+      }
+
+
+      updateIrregularFixedUI();
+
+
+      document
+        .getElementById("irregularFixedModal")
+        .style.display =
+        "flex";
+
+    }
+
+
+    /*
+      「この日だけ固定あり / なし」の切り替え
+    */
+    function selectIrregularFixedType(type) {
+
+      irregularFixedEditingType =
+        type;
+
+
+      updateIrregularFixedUI();
+
+    }
+
+
+    function updateIrregularFixedUI() {
+
+      document
+        .getElementById("irregularFixedOn")
+        .classList
+        .toggle(
+          "active",
+          irregularFixedEditingType === "on"
+        );
+
+
+      document
+        .getElementById("irregularFixedOff")
+        .classList
+        .toggle(
+          "active",
+          irregularFixedEditingType === "off"
+        );
+
+
+      document
+        .getElementById("irregularFixedTimeArea")
+        .style.display =
+        irregularFixedEditingType === "on"
+        ? "block"
+        : "none";
+
+    }
+
+
+    /*
+      イレギュラー固定を保存
+    */
+    function saveIrregularFixed() {
+
+      const userId =
+        irregularFixedEditingUserId;
+
+
+      const dateKey =
+        irregularFixedEditingDateKey;
+
+
+      irregularFixedShifts[userId] ??= {};
+
+
+      /*
+        その日だけ固定なし
+      */
+      if (
+        irregularFixedEditingType === "off"
+      ) {
+
+        irregularFixedShifts[userId][dateKey] = {
+
+          enabled:
+            false,
+
+          start:
+            "",
+
+          end:
+            ""
+
+        };
+
+      }
+
+
+      /*
+        その日だけ固定あり
+      */
+      else {
+
+        const start =
+          document
+            .getElementById("irregularFixedStart")
+            .value;
+
+
+        const end =
+          document
+            .getElementById("irregularFixedEnd")
+            .value;
+
+
+        if (
+          !start
+          ||
+          !end
+          ||
+          start >= end
+        ) {
+
+          alert(
+            "この日の固定シフト時間を確認してください"
+          );
+
+          return;
+
+        }
+
+
+        irregularFixedShifts[userId][dateKey] = {
+
+          enabled:
+            true,
+
+          start:
+            start,
+
+          end:
+            end
+
+        };
+
+      }
+
+
+      save(
+        "shiftAppIrregularFixedShifts",
+        irregularFixedShifts
+      );
+
+
+      closeModal(
+        "irregularFixedModal"
+      );
+
+
+      renderSchedule();
+
+      renderAdminStaff();
+
+    }
+
+
+    /*
+      「通常の固定シフトに戻す」
+
+      その日のイレギュラー設定自体を削除します。
+      すると getFixed() が自動的に通常固定を使うようになります。
+    */
+    function clearIrregularFixed() {
+
+      const userId =
+        irregularFixedEditingUserId;
+
+
+      const dateKey =
+        irregularFixedEditingDateKey;
+
+
+      if (
+        irregularFixedShifts[userId]
+      ) {
+
+        delete irregularFixedShifts[userId][dateKey];
+
+      }
+
+
+      save(
+        "shiftAppIrregularFixedShifts",
+        irregularFixedShifts
+      );
+
+
+      closeModal(
+        "irregularFixedModal"
+      );
+
+
+      renderSchedule();
+
+      renderAdminStaff();
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：希望変更画面を開く
+      ============================================================
+    */
+    function openAdminEdit(userId, date) {
+
+      adminEditingUserId =
+        userId;
+
+
+      adminEditingDateKey =
+        fmtDate(date);
+
+
+      const data =
+        (
+          allShiftData[userId]
+          ||
+          {}
+        )[adminEditingDateKey];
+
+
+      adminEditingType =
+        data
+        ? data.type
+        : "work";
+
+
+      document
+        .getElementById("adminEditTitle")
+        .textContent =
+        users[userId].name
+        +
+        "｜"
+        +
+        (date.getMonth() + 1)
+        +
+        "/"
+        +
+        date.getDate();
+
+
+      const inputs = [
+
+        [
+          "as1",
+          "available1",
+          "start"
+        ],
+
+        [
+          "ae1",
+          "available1",
+          "end"
+        ],
+
+        [
+          "as2",
+          "available2",
+          "start"
+        ],
+
+        [
+          "ae2",
+          "available2",
+          "end"
+        ]
+
+      ];
+
+
+      inputs.forEach(
+        ([id, objectName, property]) => {
+
+          document
+            .getElementById(id)
+            .value =
+            data &&
+            data[objectName]
+            ? data[objectName][property]
+            : "";
+
+        }
+      );
+
+
+      updateAdminType();
+
+
+      document
+        .getElementById("adminEditModal")
+        .style.display =
+        "flex";
+
+    }
+
+
+    /*
+      管理者：出勤可能 / 希望休切替
+    */
+    function selectAdminType(type) {
+
+      adminEditingType =
+        type;
+
+
+      updateAdminType();
+
+    }
+
+
+    function updateAdminType() {
+
+      document
+        .getElementById("aWork")
+        .classList
+        .toggle(
+          "active",
+          adminEditingType === "work"
+        );
+
+
+      document
+        .getElementById("aOff")
+        .classList
+        .toggle(
+          "active",
+          adminEditingType === "off"
+        );
+
+
+      document
+        .getElementById("adminAvail")
+        .style.display =
+        adminEditingType === "work"
+        ? "block"
+        : "none";
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：希望変更保存
+      ============================================================
+    */
+    function saveAdminEdit() {
+
+      const userId =
+        adminEditingUserId;
+
+
+      const dateKey =
+        adminEditingDateKey;
+
+
+      allShiftData[userId] ??= {};
+
+
+      /*
+        希望休
+      */
+      if (
+        adminEditingType === "off"
+      ) {
+
+        const old =
+          allShiftData[userId][dateKey]
+          ||
+          {};
+
+
+        /*
+          古いバージョンの fixedOverride が
+          もし残っていても、ここで消してから保存します。
+        */
+        delete old.fixedOverride;
+
+
+        allShiftData[userId][dateKey] = {
+
+          /*
+            ...old は、
+            元データに fixedOverride などがあれば
+            消さずに残すための書き方です。
+          */
+          ...old,
+
+          type: "off",
+
+          editedBy: "admin",
+
+          updatedAt:
+            new Date()
+              .toISOString()
+
+        };
+
+      }
+
+
+      /*
+        出勤可能
+      */
+      else {
+
+        const start1 =
+          document
+            .getElementById("as1")
+            .value;
+
+
+        const end1 =
+          document
+            .getElementById("ae1")
+            .value;
+
+
+        const start2 =
+          document
+            .getElementById("as2")
+            .value;
+
+
+        const end2 =
+          document
+            .getElementById("ae2")
+            .value;
+
+
+        if (
+          !start1
+          ||
+          !end1
+          ||
+          start1 >= end1
+          ||
+          !validRange(
+            start2,
+            end2
+          )
+        ) {
+
+          alert(
+            "時間を確認してください"
+          );
+
+          return;
+
+        }
+
+
+        const old =
+          allShiftData[userId][dateKey]
+          ||
+          {};
+
+
+        /*
+          古いバージョンの fixedOverride が
+          もし残っていても、ここで消してから保存します。
+        */
+        delete old.fixedOverride;
+
+
+        allShiftData[userId][dateKey] = {
+
+          ...old,
+
+          type: "work",
+
+          available1: {
+            start: start1,
+            end: end1
+          },
+
+          available2:
+            start2
+            ? {
+                start: start2,
+                end: end2
+              }
+            : null,
+
+          editedBy: "admin",
+
+          updatedAt:
+            new Date()
+              .toISOString()
+
+        };
+
+      }
+
+
+      save(
+        "shiftAppShiftData",
+        allShiftData
+      );
+
+
+      closeModal(
+        "adminEditModal"
+      );
+
+
+      renderAdminStaff();
+
+      renderSchedule();
+
+    }
+
+
+    /*
+      ============================================================
+      モーダルを閉じる
+      ============================================================
+    */
+    function closeModal(id) {
+
+      document
+        .getElementById(id)
+        .style.display =
+        "none";
+
+    }
+
+
+    /*
+      半透明の黒い背景を押した時だけ閉じる
+    */
+    function outsideClose(event, id) {
+
+      if (
+        event.target.id === id
+      ) {
+
+        closeModal(id);
+
+      }
+
+    }
+
+
+    /*
+      ページ全体でpointerupを監視して、
+      どこで指を離してもドラッグ終了にする
+    */
+    window.addEventListener(
+      "pointerup",
+      finishDrag
+    );
+
+  </script>
+</body>
+</html>
