@@ -20,8 +20,12 @@
     <script> ～ </script> の中が JavaScript
     それ以外の <div> や <button> などが HTML です。
 
-    ※ 現在は localStorage という「このブラウザの中だけの保存」を使っています。
-       本当に複数のスマホで共有する段階になったら Firebase に置き換えます。
+    ※ 現在は Firebase（Cloud Firestore）をメインの保存先として使っています。
+       Mac・Windows・iPhoneなど、別の端末から同じデータを共有できます。
+
+       localStorage も一部使っていますが、これは画面表示を速くするための
+       「この端末内の一時キャッシュ」として残しているだけです。
+       実際の共有データは Firebase に保存・同期されます。
   -->
 
   <!-- 日本語の文字化けを防ぐ設定 -->
@@ -868,15 +872,21 @@
       <label>スタッフ番号</label>
       <input id="loginId" placeholder="例：001">
 
-      <label>名前</label>
-      <input id="loginName" placeholder="例：山田 花子">
+      <label>6桁以上のPIN</label>
+      <input
+        id="loginPin"
+        type="password"
+        inputmode="numeric"
+        autocomplete="current-password"
+        placeholder="管理者から登録されたPIN"
+      >
 
       <button class="btn btn-primary" onclick="staffLogin()">
         スタッフログイン
       </button>
 
       <div class="muted" style="margin-top:10px;">
-        ※ スタッフ番号と名前は、先に管理者が登録します。
+        ※ スタッフ番号とPINは、先に管理者が登録します。
       </div>
     </div>
 
@@ -884,15 +894,28 @@
     <div class="card">
       <h3>管理者</h3>
 
+      <label>管理者ID</label>
+      <input
+        id="adminId"
+        autocomplete="username"
+        placeholder="自分で決めた管理者ID"
+      >
+
       <label>管理者パスワード</label>
-      <input id="adminPass" type="password">
+      <input
+        id="adminPass"
+        type="password"
+        autocomplete="current-password"
+        placeholder="自分で決めたパスワード"
+      >
 
       <button class="btn btn-dark" onclick="adminLogin()">
         管理者ログイン
       </button>
 
       <div class="muted">
-        試作用：admin123
+        ※ 管理者IDとパスワードは自分で決められます。
+        Firebaseの裏側では、管理者IDを内部用メールアドレスに変換してログインします。
       </div>
     </div>
 
@@ -1059,6 +1082,23 @@
             id="newStaffName"
             placeholder="例：山田 花子"
           >
+
+
+          <label>
+            ログイン用PIN（6桁以上）
+          </label>
+
+          <input
+            id="newStaffPin"
+            type="password"
+            inputmode="numeric"
+            placeholder="例：123456"
+          >
+
+
+          <div class="muted" style="margin-top:6px;">
+            スタッフ本人は「スタッフ番号＋このPIN」でログインします。
+          </div>
 
 
           <button
@@ -1825,12 +1865,182 @@
     */
     function save(key, object) {
 
+      /*
+        まず、この端末にもキャッシュとして保存します。
+        これにより画面表示はすぐ反映されます。
+      */
       localStorage.setItem(
         key,
         JSON.stringify(object)
       );
 
+
+      /*
+        Firebaseログイン後は、
+        同じ変更をCloud Firestoreにも送ります。
+
+        queueSync() 側で少し待ってからまとめて同期するので、
+        ガントチャートをドラッグした時も
+        30分マスごとに大量通信しにくい作りです。
+      */
+      if (
+        window.firebaseBridge
+      ) {
+
+        window.firebaseBridge.queueSync(
+          key,
+          object
+        );
+
+      }
+
     }
+
+
+    /*
+      ============================================================
+      Firebaseから読み込んだデータを画面側へ反映
+      ============================================================
+
+      Firebase用の処理は下の <script type="module"> に分けています。
+
+      そこからこの関数を呼ぶことで、
+      今まで使っていた
+
+      users
+      allShiftData
+      fixedShiftVersions
+      ...
+
+      という変数にFirebaseの最新データを入れます。
+    */
+    function applyFirebaseState(state) {
+
+      users =
+        state.users || {};
+
+      allShiftData =
+        state.allShiftData || {};
+
+      allFixedShifts =
+        state.allFixedShifts || {};
+
+      fixedShiftVersions =
+        state.fixedShiftVersions || {};
+
+      irregularFixedShifts =
+        state.irregularFixedShifts || {};
+
+      submissions =
+        state.submissions || {};
+
+      monthlyMessages =
+        state.monthlyMessages || {};
+
+      confirmedShifts =
+        state.confirmedShifts || {};
+
+
+      /*
+        スタッフとしてログイン中なら、
+        currentUserも最新の名前に更新します。
+      */
+      if (
+        currentUser &&
+        users[currentUser.id]
+      ) {
+
+        currentUser =
+          users[currentUser.id];
+
+      }
+
+
+      /*
+        Firebaseから受け取った内容を、
+        この端末のキャッシュにも直接保存します。
+
+        ここでは save() を使いません。
+        save()を使うとFirebaseへ再送信されてしまうためです。
+      */
+      localStorage.setItem(
+        "shiftAppUsers",
+        JSON.stringify(users)
+      );
+
+      localStorage.setItem(
+        "shiftAppShiftData",
+        JSON.stringify(allShiftData)
+      );
+
+      localStorage.setItem(
+        "shiftAppFixedShifts",
+        JSON.stringify(allFixedShifts)
+      );
+
+      localStorage.setItem(
+        "shiftAppFixedShiftVersions",
+        JSON.stringify(fixedShiftVersions)
+      );
+
+      localStorage.setItem(
+        "shiftAppIrregularFixedShifts",
+        JSON.stringify(irregularFixedShifts)
+      );
+
+      localStorage.setItem(
+        "shiftAppSubmissions",
+        JSON.stringify(submissions)
+      );
+
+      localStorage.setItem(
+        "shiftAppMonthlyMessages",
+        JSON.stringify(monthlyMessages)
+      );
+
+      localStorage.setItem(
+        "shiftAppConfirmed",
+        JSON.stringify(confirmedShifts)
+      );
+
+
+      /*
+        今開いている画面だけ描き直します。
+      */
+      if (
+        document
+          .getElementById("staffPage")
+          .classList
+          .contains("active")
+        &&
+        currentUser
+      ) {
+
+        renderMonth();
+
+      }
+
+
+      if (
+        document
+          .getElementById("adminPage")
+          .classList
+          .contains("active")
+      ) {
+
+        renderAdmin();
+
+      }
+
+    }
+
+
+    /*
+      Firebase側のモジュールから呼べるように、
+      window にも登録しておきます。
+    */
+    window.applyFirebaseState =
+      applyFirebaseState;
 
 
     /*
@@ -2011,7 +2221,7 @@
 
       という流れです。
     */
-    function staffLogin() {
+    async function staffLogin() {
 
       const id =
         document
@@ -2020,20 +2230,20 @@
           .trim();
 
 
-      const name =
+      const pin =
         document
-          .getElementById("loginName")
+          .getElementById("loginPin")
           .value
           .trim();
 
 
       if (
         !id ||
-        !name
+        !pin
       ) {
 
         alert(
-          "スタッフ番号と名前を入力してください"
+          "スタッフ番号とPINを入力してください"
         );
 
         return;
@@ -2041,30 +2251,12 @@
       }
 
 
-      /*
-        管理者がまだ登録していないスタッフ番号ならログイン不可
-      */
-      if (!users[id]) {
-
-        alert(
-          "このスタッフ番号はまだ登録されていません。\n管理者に登録してもらってください。"
-        );
-
-        return;
-
-      }
-
-
-      /*
-        スタッフ番号は登録済みでも、
-        入力した名前が登録名と違う場合はログイン不可
-      */
       if (
-        users[id].name !== name
+        pin.length < 6
       ) {
 
         alert(
-          "スタッフ番号と登録名が一致しません"
+          "PINは6桁以上です"
         );
 
         return;
@@ -2072,49 +2264,69 @@
       }
 
 
-      /* ログイン中スタッフとして覚える */
-      currentUser = users[id];
+      try {
+
+        /*
+          Firebase Authenticationで本人確認
+          ↓
+          Firestoreからそのスタッフ自身のデータを読み込み
+          ↓
+          最新データをこの画面へ反映
+
+          という処理をFirebase側に任せます。
+        */
+        const result =
+          await window.firebaseBridge.staffLogin(
+            id,
+            pin
+          );
 
 
-      /*
-        このスタッフ用のデータ箱がなければ作る。
-
-        ??= は
-        「左側が空なら右側を入れる」
-        という意味です。
-      */
-      allShiftData[id] ??= {};
-      allFixedShifts[id] ??= {};
-      fixedShiftVersions[id] ??= [];
-      irregularFixedShifts[id] ??= {};
-      monthlyMessages[id] ??= {};
+        applyFirebaseState(
+          result.state
+        );
 
 
-      /*
-        画面上部に名前と番号を表示
-      */
-      document
-        .getElementById("staffName")
-        .textContent =
-        name + " さん";
+        currentUser =
+          result.profile;
 
 
-      document
-        .getElementById("staffId")
-        .textContent =
-        "スタッフ番号：" + id;
+        document
+          .getElementById("staffName")
+          .textContent =
+          currentUser.name
+          +
+          " さん";
 
 
-      /*
-        スタッフ画面に移動
-      */
-      showPage("staffPage");
+        document
+          .getElementById("staffId")
+          .textContent =
+          "スタッフ番号："
+          +
+          currentUser.id;
 
 
-      /*
-        月間シフトを作り直す
-      */
-      renderMonth();
+        showPage(
+          "staffPage"
+        );
+
+
+        renderMonth();
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        alert(
+          error.message
+          ||
+          "ログインできませんでした"
+        );
+
+      }
 
     }
 
@@ -2127,7 +2339,14 @@
       ※ 今は試作品なので admin123 をHTML内に直接書いています。
          本番ではFirebase Authenticationなどに変えます。
     */
-    function adminLogin() {
+    async function adminLogin() {
+
+      const adminId =
+        document
+          .getElementById("adminId")
+          .value
+          .trim();
+
 
       const password =
         document
@@ -2136,11 +2355,12 @@
 
 
       if (
-        password !== "admin123"
+        !adminId ||
+        !password
       ) {
 
         alert(
-          "パスワードが違います"
+          "管理者IDとパスワードを入力してください"
         );
 
         return;
@@ -2148,64 +2368,82 @@
       }
 
 
-      /*
-        管理者画面を最初に開いた時は、
-        「今日」を1日表示の初期日付にします。
+      try {
 
-        例：
-        今日が 2026/9/16 なら、
-        最初に 9/16 が表示されます。
-      */
-      selectedScheduleDate =
-        new Date();
+        /*
+          画面上では「管理者ID＋パスワード」でログインします。
+
+          Firebase Authenticationは内部ではメール形式が必要なので、
+          下のFirebase接続部分で管理者IDを
+          アプリ内部用メールアドレスへ変換します。
+
+          管理者本人はそのメールアドレスを覚える必要はありません。
+        */
+        const result =
+          await window.firebaseBridge.adminLogin(
+            adminId,
+            password
+          );
 
 
-      /*
-        週表示の初期位置も、
-        「今日が含まれる週の月曜日」にします。
-
-        例：
-        今日が水曜日なら、その週の月曜日〜日曜日を表示します。
-      */
-      weekStart =
-        getMonday(
-          selectedScheduleDate
+        applyFirebaseState(
+          result.state
         );
 
 
-      /*
-        上部の「○年○月」表示も
-        今日の月に合わせます。
-      */
-      adminMonth =
-        new Date(
-          selectedScheduleDate.getFullYear(),
-          selectedScheduleDate.getMonth(),
-          1
+        /*
+          管理者画面を最初に開いた時は今日を表示
+        */
+        selectedScheduleDate =
+          new Date();
+
+
+        weekStart =
+          getMonday(
+            selectedScheduleDate
+          );
+
+
+        adminMonth =
+          new Date(
+            selectedScheduleDate.getFullYear(),
+            selectedScheduleDate.getMonth(),
+            1
+          );
+
+
+        scheduleMonth =
+          new Date(
+            selectedScheduleDate.getFullYear(),
+            selectedScheduleDate.getMonth(),
+            1
+          );
+
+
+        currentAdminTab =
+          "staff";
+
+
+        showPage(
+          "adminPage"
         );
 
 
-      /*
-        日付・週別タブの表示月も今日の月にします。
-      */
-      scheduleMonth =
-        new Date(
-          selectedScheduleDate.getFullYear(),
-          selectedScheduleDate.getMonth(),
-          1
+        renderAdmin();
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        alert(
+          error.message
+          ||
+          "管理者ログインできませんでした"
         );
 
-
-      /*
-        ログイン直後はスタッフ別タブから開始
-      */
-      currentAdminTab =
-        "staff";
-
-
-      showPage("adminPage");
-
-      renderAdmin();
+      }
 
     }
 
@@ -2215,11 +2453,24 @@
       ログアウト
       ============================================================
     */
-    function logout() {
+    async function logout() {
 
-      currentUser = null;
+      currentUser =
+        null;
 
-      showPage("loginPage");
+
+      if (
+        window.firebaseBridge
+      ) {
+
+        await window.firebaseBridge.logout();
+
+      }
+
+
+      showPage(
+        "loginPage"
+      );
 
     }
 
@@ -3982,14 +4233,8 @@
 
       のようなデータになります。
     */
-    function addStaffByAdmin() {
+    async function addStaffByAdmin() {
 
-      /*
-        入力欄から値を取り出す。
-
-        .trim() は、
-        前後に間違って入った空白を消すための処理です。
-      */
       const id =
         document
           .getElementById("newStaffId")
@@ -4004,16 +4249,21 @@
           .trim();
 
 
-      /*
-        どちらかが空欄なら登録しない
-      */
+      const pin =
+        document
+          .getElementById("newStaffPin")
+          .value
+          .trim();
+
+
       if (
         !id ||
-        !name
+        !name ||
+        !pin
       ) {
 
         alert(
-          "スタッフ番号と名前を入力してください"
+          "スタッフ番号・名前・PINを入力してください"
         );
 
         return;
@@ -4021,16 +4271,12 @@
       }
 
 
-      /*
-        同じスタッフ番号がすでに使われている場合。
-
-        スタッフ番号は1人につき1つにしたいので、
-        重複登録を防ぎます。
-      */
-      if (users[id]) {
+      if (
+        pin.length < 6
+      ) {
 
         alert(
-          "そのスタッフ番号はすでに登録されています。"
+          "PINは6桁以上にしてください"
         );
 
         return;
@@ -4038,98 +4284,72 @@
       }
 
 
-      /*
-        users の中に新しいスタッフを追加
-      */
-      users[id] = {
-        id: id,
-        name: name
-      };
+      if (
+        users[id]
+      ) {
+
+        alert(
+          "そのスタッフ番号はすでに登録されています"
+        );
+
+        return;
+
+      }
 
 
-      /*
-        localStorageにも保存する。
+      try {
 
-        これをしないとページを閉じた時に消えてしまいます。
-      */
-      save(
-        "shiftAppUsers",
-        users
-      );
+        /*
+          管理者ログインを維持したまま、
+          Firebaseにスタッフ用Authenticationアカウントを作成します。
 
-
-      /*
-        このスタッフ用の空データも用意しておく
-      */
-      allShiftData[id] ??= {};
-      allFixedShifts[id] ??= {};
-      fixedShiftVersions[id] ??= [];
-      irregularFixedShifts[id] ??= {};
-      monthlyMessages[id] ??= {};
+          実際のメールアドレスは使わず、
+          スタッフ番号からアプリ内部用のメールを作ります。
+        */
+        await window.firebaseBridge.createStaff(
+          id,
+          name,
+          pin
+        );
 
 
-      save(
-        "shiftAppShiftData",
-        allShiftData
-      );
+        document
+          .getElementById("newStaffId")
+          .value =
+          "";
 
 
-      save(
-        "shiftAppFixedShifts",
-        allFixedShifts
-      );
+        document
+          .getElementById("newStaffName")
+          .value =
+          "";
 
 
-      save(
-        "shiftAppFixedShiftVersions",
-        fixedShiftVersions
-      );
+        document
+          .getElementById("newStaffPin")
+          .value =
+          "";
 
 
-      save(
-        "shiftAppIrregularFixedShifts",
-        irregularFixedShifts
-      );
+        alert(
+          name
+          +
+          " さんを登録しました"
+        );
 
+      }
 
-      save(
-        "shiftAppMonthlyMessages",
-        monthlyMessages
-      );
+      catch (error) {
 
+        console.error(error);
 
-      /*
-        登録が終わったら入力欄を空にする
-      */
-      document
-        .getElementById("newStaffId")
-        .value =
-        "";
+        alert(
+          error.message
+          ||
+          "スタッフを登録できませんでした"
+        );
 
-
-      document
-        .getElementById("newStaffName")
-        .value =
-        "";
-
-
-      alert(
-        name
-        +
-        " さんを登録しました。"
-      );
-
-
-      /*
-        スタッフ一覧を最新状態に更新
-      */
-      renderAdminStaff();
-
-      /*
-        日付別・週別ガントチャートにも
-        新しいスタッフが表示されるよう更新
-      */
-      renderSchedule();
+      }
 
     }
 
@@ -4513,7 +4733,7 @@
                     class="delete-button"
                     onclick="deleteStaff('${userId}')"
                   >
-                    スタッフ登録を削除
+                    スタッフ利用停止
                   </button>
 
                 </div>
@@ -4582,7 +4802,7 @@
       「人は残したいけど最初からシフトを入れ直したい」
       ときに使います。
     */
-    function resetStaffShiftData(userId) {
+    async function resetStaffShiftData(userId) {
 
       const user =
         users[userId];
@@ -4604,6 +4824,27 @@
 
       if (!ok) {
         return;
+      }
+
+
+      try {
+
+        await window.firebaseBridge.resetStaffData(
+          userId
+        );
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        alert(
+          "Firebase側のリセットに失敗しました"
+        );
+
+        return;
+
       }
 
 
@@ -4675,7 +4916,7 @@
       同じスタッフ番号は、
       削除後なら管理者がもう一度登録できます。
     */
-    function deleteStaff(userId) {
+    async function deleteStaff(userId) {
 
       const user =
         users[userId];
@@ -4685,18 +4926,50 @@
         confirm(
           user.name
           +
-          " さんをスタッフ一覧から削除します。\n\n"
+          " さんの利用を停止します。\n\n"
           +
-          "スタッフ番号・希望・固定・確定シフトもすべて消えます。\n\n"
+          "希望・固定・確定シフトなどのデータも削除します。\n\n"
           +
-          "この操作は元に戻せません。\n"
+          "このスタッフは以後ログインしてもデータへアクセスできません。\n"
           +
-          "本当に削除しますか？"
+          "本当に利用停止しますか？"
         );
 
 
       if (!ok) {
         return;
+      }
+
+
+      try {
+
+        /*
+          ブラウザだけでは、管理者が別ユーザーの
+          Firebase Authenticationアカウント自体を完全削除できません。
+
+          そのためここでは、
+          Firestoreのスタッフ登録とデータを削除して
+          「利用停止」にします。
+
+          Security Rulesでもusers文書がないスタッフは
+          データへアクセスできないようにします。
+        */
+        await window.firebaseBridge.deactivateStaff(
+          userId
+        );
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        alert(
+          "利用停止処理に失敗しました"
+        );
+
+        return;
+
       }
 
 
@@ -6957,5 +7230,1546 @@
     );
 
   </script>
+
+  <!--
+    ============================================================
+    Firebase接続部分
+    ============================================================
+
+    この部分だけ type="module" になっています。
+
+    Firebase公式CDNから、
+    Authentication と Firestore の必要な機能だけ読み込みます。
+
+    ここにある firebaseConfig は
+    Firebase Webアプリの「接続先情報」です。
+    パスワードそのものではありません。
+  -->
+  <script type="module">
+
+    import {
+      initializeApp
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+
+
+    import {
+      getAuth,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+
+
+    import {
+      getFirestore,
+      collection,
+      doc,
+      getDoc,
+      getDocs,
+      setDoc,
+      deleteDoc,
+      onSnapshot
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+
+    /*
+      ============================================================
+      あなたのFirebaseプロジェクト
+      ============================================================
+    */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCSZ4cfQdTreJnER3hrQYVH8HehQp9fStg",
+      authDomain: "shift-3fab2.firebaseapp.com",
+      projectId: "shift-3fab2",
+      storageBucket: "shift-3fab2.firebasestorage.app",
+      messagingSenderId: "262785094936",
+      appId: "1:262785094936:web:3cd80d815bd00d1a80fa6d"
+    };
+
+
+    const app =
+      initializeApp(
+        firebaseConfig
+      );
+
+
+    const auth =
+      getAuth(app);
+
+
+    const db =
+      getFirestore(app);
+
+
+    /*
+      管理者がスタッフを作る時用の
+      「2つ目のFirebaseアプリ」。
+
+      これを分けることで、
+      新しいスタッフを登録しても
+      管理者自身がログアウトされません。
+    */
+    const staffCreatorApp =
+      initializeApp(
+        firebaseConfig,
+        "staffCreator"
+      );
+
+
+    const staffCreatorAuth =
+      getAuth(
+        staffCreatorApp
+      );
+
+
+    /*
+      ============================================================
+      スタッフ番号 → Firebase内部メール
+      ============================================================
+
+      スタッフ本人にはメール入力をさせません。
+
+      例：
+      001
+      ↓
+      staff-001@shiftapp.invalid
+
+      という内部用アドレスへ変換して、
+      Firebase Authenticationを使います。
+    */
+    function staffEmail(staffId) {
+
+      const safeId =
+        String(staffId)
+          .trim()
+          .toLowerCase()
+          .replace(
+            /[^a-z0-9._-]/g,
+            "_"
+          );
+
+
+      return (
+        "staff-"
+        +
+        safeId
+        +
+        "@shiftapp.invalid"
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      管理者ID → Firebase内部メール
+      ============================================================
+
+      画面では管理者IDだけ入力します。
+
+      例：
+      管理者ID = manager01
+
+      ↓ 内部では
+
+      admin-manager01@shiftapp.invalid
+
+      に変換してFirebase Authenticationへ渡します。
+
+      この内部メールはログイン処理のためだけに使います。
+    */
+    function adminEmail(adminId) {
+
+      const safeId =
+        String(adminId)
+          .trim()
+          .toLowerCase()
+          .replace(
+            /[^a-z0-9._-]/g,
+            "_"
+          );
+
+
+      return (
+        "admin-"
+        +
+        safeId
+        +
+        "@shiftapp.invalid"
+      );
+
+    }
+
+
+    /*
+      スタッフ番号とFirebase UIDの対応
+    */
+    let staffIdToUid = {};
+    let uidToStaffId = {};
+
+
+    /*
+      Firebaseのリアルタイム監視を解除する関数を保存
+    */
+    let unsubscribeList = [];
+
+
+    /*
+      現在のFirebase状態
+    */
+    let remoteState = {
+      users: {},
+      allShiftData: {},
+      allFixedShifts: {},
+      fixedShiftVersions: {},
+      irregularFixedShifts: {},
+      submissions: {},
+      monthlyMessages: {},
+      confirmedShifts: {}
+    };
+
+
+    function blankState() {
+
+      return {
+        users: {},
+        allShiftData: {},
+        allFixedShifts: {},
+        fixedShiftVersions: {},
+        irregularFixedShifts: {},
+        submissions: {},
+        monthlyMessages: {},
+        confirmedShifts: {}
+      };
+
+    }
+
+
+    /*
+      ============================================================
+      Firestoreのコレクションを普通のJavaScriptオブジェクトへ
+      ============================================================
+    */
+    async function collectionToMap(
+      uid,
+      subcollection
+    ) {
+
+      const snapshot =
+        await getDocs(
+          collection(
+            db,
+            "staffData",
+            uid,
+            subcollection
+          )
+        );
+
+
+      const result = {};
+
+
+      snapshot.forEach(
+        item => {
+
+          result[item.id] =
+            item.data();
+
+        }
+      );
+
+
+      return result;
+
+    }
+
+
+    /*
+      ============================================================
+      1人分のデータを読み込む
+      ============================================================
+    */
+    async function loadOneStaff(
+      uid,
+      staffId
+    ) {
+
+      const availability =
+        await collectionToMap(
+          uid,
+          "availability"
+        );
+
+
+      const messages =
+        await collectionToMap(
+          uid,
+          "messages"
+        );
+
+
+      const submitted =
+        await collectionToMap(
+          uid,
+          "submissions"
+        );
+
+
+      const fixedMap =
+        await collectionToMap(
+          uid,
+          "fixedVersions"
+        );
+
+
+      const irregular =
+        await collectionToMap(
+          uid,
+          "irregularFixed"
+        );
+
+
+      const confirmedMap =
+        await collectionToMap(
+          uid,
+          "confirmed"
+        );
+
+
+      remoteState.allShiftData[staffId] =
+        availability;
+
+
+      remoteState.monthlyMessages[staffId] =
+        Object.fromEntries(
+          Object.entries(messages)
+            .map(
+              ([key, value]) =>
+              [
+                key,
+                value.message || ""
+              ]
+            )
+        );
+
+
+      remoteState.submissions[staffId] =
+        Object.fromEntries(
+          Object.entries(submitted)
+            .map(
+              ([key, value]) =>
+              [
+                key,
+                Boolean(value.submitted)
+              ]
+            )
+        );
+
+
+      /*
+        fixedVersions は
+        アプリ側では配列として使っています。
+      */
+      remoteState.fixedShiftVersions[staffId] =
+        Object.values(fixedMap)
+          .sort(
+            (a, b) =>
+            a.effectiveFrom.localeCompare(
+              b.effectiveFrom
+            )
+          );
+
+
+      remoteState.irregularFixedShifts[staffId] =
+        irregular;
+
+
+      remoteState.confirmedShifts[staffId] =
+        Object.fromEntries(
+          Object.entries(confirmedMap)
+            .map(
+              ([key, value]) =>
+              [
+                key,
+                value.slots || []
+              ]
+            )
+        );
+
+
+      /*
+        新しいFirebase版では
+        allFixedShifts は互換用で空のままです。
+        通常固定は fixedVersions を使います。
+      */
+      remoteState.allFixedShifts[staffId] ??= {};
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：全スタッフを1回読み込む
+      ============================================================
+    */
+    async function loadAdminState() {
+
+      remoteState =
+        blankState();
+
+
+      staffIdToUid = {};
+      uidToStaffId = {};
+
+
+      const userSnapshot =
+        await getDocs(
+          collection(
+            db,
+            "users"
+          )
+        );
+
+
+      const staffDocs = [];
+
+
+      userSnapshot.forEach(
+        userDoc => {
+
+          const data =
+            userDoc.data();
+
+
+          if (
+            data.role === "staff"
+            &&
+            data.active !== false
+          ) {
+
+            const staffId =
+              data.staffId;
+
+
+            remoteState.users[staffId] = {
+              id: staffId,
+              name: data.name,
+              uid: userDoc.id
+            };
+
+
+            staffIdToUid[staffId] =
+              userDoc.id;
+
+
+            uidToStaffId[userDoc.id] =
+              staffId;
+
+
+            staffDocs.push({
+              uid: userDoc.id,
+              staffId: staffId
+            });
+
+          }
+
+        }
+      );
+
+
+      for (
+        const staff of staffDocs
+      ) {
+
+        await loadOneStaff(
+          staff.uid,
+          staff.staffId
+        );
+
+      }
+
+
+      return remoteState;
+
+    }
+
+
+    /*
+      ============================================================
+      スタッフ本人：自分だけ読み込む
+      ============================================================
+    */
+    async function loadStaffState(
+      uid,
+      profile
+    ) {
+
+      remoteState =
+        blankState();
+
+
+      const staffId =
+        profile.staffId;
+
+
+      staffIdToUid = {
+        [staffId]:
+          uid
+      };
+
+
+      uidToStaffId = {
+        [uid]:
+          staffId
+      };
+
+
+      remoteState.users[staffId] = {
+        id: staffId,
+        name: profile.name,
+        uid: uid
+      };
+
+
+      await loadOneStaff(
+        uid,
+        staffId
+      );
+
+
+      return remoteState;
+
+    }
+
+
+    /*
+      ============================================================
+      リアルタイム監視を解除
+      ============================================================
+    */
+    function stopListeners() {
+
+      unsubscribeList.forEach(
+        unsubscribe => {
+
+          try {
+            unsubscribe();
+          }
+          catch (error) {
+            console.error(error);
+          }
+
+        }
+      );
+
+
+      unsubscribeList = [];
+
+    }
+
+
+    /*
+      Firebase最新状態を画面側へ通知
+    */
+    function pushRemoteState() {
+
+      if (
+        window.applyFirebaseState
+      ) {
+
+        /*
+          参照共有を避けるため、
+          JSONでコピーして渡します。
+        */
+        window.applyFirebaseState(
+          JSON.parse(
+            JSON.stringify(
+              remoteState
+            )
+          )
+        );
+
+      }
+
+    }
+
+
+    /*
+      1人分のサブコレクションをリアルタイム監視
+    */
+    function listenOneStaff(
+      uid,
+      staffId
+    ) {
+
+      const configs = [
+
+        [
+          "availability",
+          snapshot => {
+
+            const map = {};
+
+            snapshot.forEach(
+              item => {
+                map[item.id] =
+                  item.data();
+              }
+            );
+
+            remoteState.allShiftData[staffId] =
+              map;
+          }
+        ],
+
+        [
+          "messages",
+          snapshot => {
+
+            const map = {};
+
+            snapshot.forEach(
+              item => {
+                map[item.id] =
+                  item.data().message || "";
+              }
+            );
+
+            remoteState.monthlyMessages[staffId] =
+              map;
+          }
+        ],
+
+        [
+          "submissions",
+          snapshot => {
+
+            const map = {};
+
+            snapshot.forEach(
+              item => {
+                map[item.id] =
+                  Boolean(
+                    item.data().submitted
+                  );
+              }
+            );
+
+            remoteState.submissions[staffId] =
+              map;
+          }
+        ],
+
+        [
+          "fixedVersions",
+          snapshot => {
+
+            const list = [];
+
+            snapshot.forEach(
+              item => {
+                list.push(
+                  item.data()
+                );
+              }
+            );
+
+            list.sort(
+              (a, b) =>
+              a.effectiveFrom.localeCompare(
+                b.effectiveFrom
+              )
+            );
+
+            remoteState.fixedShiftVersions[staffId] =
+              list;
+          }
+        ],
+
+        [
+          "irregularFixed",
+          snapshot => {
+
+            const map = {};
+
+            snapshot.forEach(
+              item => {
+                map[item.id] =
+                  item.data();
+              }
+            );
+
+            remoteState.irregularFixedShifts[staffId] =
+              map;
+          }
+        ],
+
+        [
+          "confirmed",
+          snapshot => {
+
+            const map = {};
+
+            snapshot.forEach(
+              item => {
+                map[item.id] =
+                  item.data().slots || [];
+              }
+            );
+
+            remoteState.confirmedShifts[staffId] =
+              map;
+          }
+        ]
+
+      ];
+
+
+      configs.forEach(
+        ([subcollection, handler]) => {
+
+          const unsubscribe =
+            onSnapshot(
+              collection(
+                db,
+                "staffData",
+                uid,
+                subcollection
+              ),
+
+              snapshot => {
+
+                handler(snapshot);
+
+                pushRemoteState();
+
+              }
+            );
+
+
+          unsubscribeList.push(
+            unsubscribe
+          );
+
+        }
+      );
+
+    }
+
+
+    /*
+      管理者のリアルタイム監視
+    */
+    function startAdminListeners() {
+
+      stopListeners();
+
+
+      /*
+        スタッフ登録が増減したら、
+        一度全体を読み直して監視も張り直します。
+      */
+      const usersUnsubscribe =
+        onSnapshot(
+          collection(
+            db,
+            "users"
+          ),
+
+          async () => {
+
+            await loadAdminState();
+
+            pushRemoteState();
+
+
+            /*
+              users監視自体を残したまま、
+              スタッフデータ監視だけ付け直します。
+            */
+            unsubscribeList
+              .slice(1)
+              .forEach(
+                unsubscribe => {
+                  try {
+                    unsubscribe();
+                  }
+                  catch {}
+                }
+              );
+
+
+            unsubscribeList =
+              unsubscribeList.slice(
+                0,
+                1
+              );
+
+
+            Object
+              .entries(
+                staffIdToUid
+              )
+              .forEach(
+                ([staffId, uid]) => {
+
+                  listenOneStaff(
+                    uid,
+                    staffId
+                  );
+
+                }
+              );
+
+          }
+        );
+
+
+      unsubscribeList.push(
+        usersUnsubscribe
+      );
+
+
+      Object
+        .entries(
+          staffIdToUid
+        )
+        .forEach(
+          ([staffId, uid]) => {
+
+            listenOneStaff(
+              uid,
+              staffId
+            );
+
+          }
+        );
+
+    }
+
+
+    /*
+      スタッフ本人のリアルタイム監視
+    */
+    function startStaffListeners(
+      uid,
+      staffId
+    ) {
+
+      stopListeners();
+
+      listenOneStaff(
+        uid,
+        staffId
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      ログイン
+      ============================================================
+    */
+    async function staffLogin(
+      staffId,
+      pin
+    ) {
+
+      const credential =
+        await signInWithEmailAndPassword(
+          auth,
+          staffEmail(staffId),
+          pin
+        );
+
+
+      const userDoc =
+        await getDoc(
+          doc(
+            db,
+            "users",
+            credential.user.uid
+          )
+        );
+
+
+      if (
+        !userDoc.exists()
+      ) {
+
+        await signOut(auth);
+
+        throw new Error(
+          "このスタッフは現在利用できません"
+        );
+
+      }
+
+
+      const profile =
+        userDoc.data();
+
+
+      if (
+        profile.role !== "staff"
+        ||
+        profile.active === false
+        ||
+        profile.staffId !== staffId
+      ) {
+
+        await signOut(auth);
+
+        throw new Error(
+          "スタッフ情報を確認できませんでした"
+        );
+
+      }
+
+
+      const state =
+        await loadStaffState(
+          credential.user.uid,
+          profile
+        );
+
+
+      startStaffListeners(
+        credential.user.uid,
+        staffId
+      );
+
+
+      return {
+        profile: {
+          id: staffId,
+          name: profile.name,
+          uid: credential.user.uid
+        },
+        state: state
+      };
+
+    }
+
+
+    async function adminLogin(
+      adminId,
+      password
+    ) {
+
+      /*
+        画面で入力された管理者IDを、
+        Firebase内部用メールへ変換して認証します。
+      */
+      const credential =
+        await signInWithEmailAndPassword(
+          auth,
+          adminEmail(adminId),
+          password
+        );
+
+
+      const userDoc =
+        await getDoc(
+          doc(
+            db,
+            "users",
+            credential.user.uid
+          )
+        );
+
+
+      if (
+        !userDoc.exists()
+        ||
+        userDoc.data().role !== "admin"
+      ) {
+
+        await signOut(auth);
+
+        throw new Error(
+          "このアカウントには管理者権限がありません"
+        );
+
+      }
+
+
+      /*
+        Firestoreの管理者プロフィールに adminId が入っている場合は、
+        入力したIDとも一致するか確認します。
+
+        adminId フィールドをまだ作っていない場合でも動くように、
+        フィールドがある時だけ確認します。
+      */
+      const adminProfile =
+        userDoc.data();
+
+
+      if (
+        adminProfile.adminId
+        &&
+        adminProfile.adminId !== adminId
+      ) {
+
+        await signOut(auth);
+
+        throw new Error(
+          "管理者IDが一致しません"
+        );
+
+      }
+
+
+      const state =
+        await loadAdminState();
+
+
+      startAdminListeners();
+
+
+      return {
+        state: state
+      };
+
+    }
+
+
+    async function logout() {
+
+      stopListeners();
+
+      await signOut(auth);
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：スタッフ作成
+      ============================================================
+    */
+    async function createStaff(
+      staffId,
+      name,
+      pin
+    ) {
+
+      const credential =
+        await createUserWithEmailAndPassword(
+          staffCreatorAuth,
+          staffEmail(staffId),
+          pin
+        );
+
+
+      try {
+
+        await setDoc(
+          doc(
+            db,
+            "users",
+            credential.user.uid
+          ),
+          {
+            role: "staff",
+            active: true,
+            staffId: staffId,
+            name: name
+          }
+        );
+
+      }
+
+      catch (error) {
+
+        /*
+          users文書作成に失敗したら、
+          少なくともstaffCreator側はログアウトします。
+        */
+        await signOut(
+          staffCreatorAuth
+        );
+
+        throw error;
+
+      }
+
+
+      await signOut(
+        staffCreatorAuth
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      保存同期
+      ============================================================
+    */
+
+    /*
+      同じキーへの連続保存をまとめるタイマー
+    */
+    const syncTimers =
+      {};
+
+
+    const pendingObjects =
+      {};
+
+
+    function queueSync(
+      key,
+      object
+    ) {
+
+      pendingObjects[key] =
+        JSON.parse(
+          JSON.stringify(
+            object
+          )
+        );
+
+
+      clearTimeout(
+        syncTimers[key]
+      );
+
+
+      syncTimers[key] =
+        setTimeout(
+          async () => {
+
+            try {
+
+              await syncKey(
+                key,
+                pendingObjects[key]
+              );
+
+            }
+
+            catch (error) {
+
+              console.error(
+                "Firebase同期エラー",
+                key,
+                error
+              );
+
+            }
+
+          },
+          350
+        );
+
+    }
+
+
+    /*
+      Firestoreの1サブコレクションを、
+      アプリ側のmapと同じ状態に揃えます。
+
+      existingにあってmapにない文書は削除。
+      mapにある文書はsetDocで保存。
+    */
+    async function syncMapCollection(
+      uid,
+      subcollection,
+      map,
+      convertValue
+    ) {
+
+      const ref =
+        collection(
+          db,
+          "staffData",
+          uid,
+          subcollection
+        );
+
+
+      const existing =
+        await getDocs(ref);
+
+
+      const currentIds =
+        new Set(
+          Object.keys(
+            map || {}
+          )
+        );
+
+
+      const tasks = [];
+
+
+      existing.forEach(
+        item => {
+
+          if (
+            !currentIds.has(
+              item.id
+            )
+          ) {
+
+            tasks.push(
+              deleteDoc(
+                item.ref
+              )
+            );
+
+          }
+
+        }
+      );
+
+
+      Object
+        .entries(
+          map || {}
+        )
+        .forEach(
+          ([id, value]) => {
+
+            tasks.push(
+              setDoc(
+                doc(
+                  db,
+                  "staffData",
+                  uid,
+                  subcollection,
+                  id
+                ),
+                convertValue(
+                  value,
+                  id
+                )
+              )
+            );
+
+          }
+        );
+
+
+      await Promise.all(
+        tasks
+      );
+
+    }
+
+
+    function allowedStaffIdsFromObject(
+      object
+    ) {
+
+      return Object
+        .keys(
+          object || {}
+        )
+        .filter(
+          staffId =>
+          Boolean(
+            staffIdToUid[staffId]
+          )
+        );
+
+    }
+
+
+    async function syncKey(
+      key,
+      object
+    ) {
+
+      /*
+        users はcreateStaff / deactivateStaffで
+        個別に管理するため、save()からは同期しません。
+      */
+      if (
+        key === "shiftAppUsers"
+        ||
+        key === "shiftAppFixedShifts"
+      ) {
+
+        return;
+
+      }
+
+
+      const staffIds =
+        allowedStaffIdsFromObject(
+          object
+        );
+
+
+      for (
+        const staffId of staffIds
+      ) {
+
+        const uid =
+          staffIdToUid[staffId];
+
+
+        const value =
+          object[staffId] || {};
+
+
+        if (
+          key === "shiftAppShiftData"
+        ) {
+
+          await syncMapCollection(
+            uid,
+            "availability",
+            value,
+            item => item
+          );
+
+        }
+
+
+        else if (
+          key === "shiftAppMonthlyMessages"
+        ) {
+
+          await syncMapCollection(
+            uid,
+            "messages",
+            value,
+            item => ({
+              message:
+                String(item || "")
+            })
+          );
+
+        }
+
+
+        else if (
+          key === "shiftAppSubmissions"
+        ) {
+
+          await syncMapCollection(
+            uid,
+            "submissions",
+            value,
+            item => ({
+              submitted:
+                Boolean(item)
+            })
+          );
+
+        }
+
+
+        else if (
+          key === "shiftAppIrregularFixedShifts"
+        ) {
+
+          await syncMapCollection(
+            uid,
+            "irregularFixed",
+            value,
+            item => item
+          );
+
+        }
+
+
+        else if (
+          key === "shiftAppConfirmed"
+        ) {
+
+          await syncMapCollection(
+            uid,
+            "confirmed",
+            value,
+            item => ({
+              slots:
+                Array.isArray(item)
+                ? item
+                : []
+            })
+          );
+
+        }
+
+
+        else if (
+          key === "shiftAppFixedShiftVersions"
+        ) {
+
+          /*
+            配列を
+            effectiveFrom を文書IDにして保存します。
+          */
+          const map =
+            {};
+
+
+          (value || [])
+            .forEach(
+              version => {
+
+                map[
+                  version.effectiveFrom
+                ] =
+                  version;
+
+              }
+            );
+
+
+          await syncMapCollection(
+            uid,
+            "fixedVersions",
+            map,
+            item => item
+          );
+
+        }
+
+      }
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：スタッフデータリセット / 利用停止
+      ============================================================
+    */
+
+    async function deleteSubcollection(
+      uid,
+      subcollection
+    ) {
+
+      const snapshot =
+        await getDocs(
+          collection(
+            db,
+            "staffData",
+            uid,
+            subcollection
+          )
+        );
+
+
+      await Promise.all(
+        snapshot.docs.map(
+          item =>
+          deleteDoc(
+            item.ref
+          )
+        )
+      );
+
+    }
+
+
+    async function resetUidData(uid) {
+
+      const subcollections = [
+        "availability",
+        "messages",
+        "submissions",
+        "fixedVersions",
+        "irregularFixed",
+        "confirmed"
+      ];
+
+
+      for (
+        const subcollection of subcollections
+      ) {
+
+        await deleteSubcollection(
+          uid,
+          subcollection
+        );
+
+      }
+
+    }
+
+
+    async function resetStaffData(
+      staffId
+    ) {
+
+      const uid =
+        staffIdToUid[staffId];
+
+
+      if (!uid) {
+
+        throw new Error(
+          "スタッフUIDが見つかりません"
+        );
+
+      }
+
+
+      await resetUidData(uid);
+
+    }
+
+
+    async function deactivateStaff(
+      staffId
+    ) {
+
+      const uid =
+        staffIdToUid[staffId];
+
+
+      if (!uid) {
+
+        throw new Error(
+          "スタッフUIDが見つかりません"
+        );
+
+      }
+
+
+      await resetUidData(uid);
+
+
+      /*
+        users文書を削除すると、
+        Security Rules上「有効なスタッフ」ではなくなります。
+      */
+      await deleteDoc(
+        doc(
+          db,
+          "users",
+          uid
+        )
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      画面側から使う機能をwindowへ公開
+      ============================================================
+    */
+    window.firebaseBridge = {
+      staffLogin,
+      adminLogin,
+      logout,
+      createStaff,
+      queueSync,
+      resetStaffData,
+      deactivateStaff
+    };
+
+  </script>
+
 </body>
 </html>
