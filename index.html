@@ -18,9 +18,9 @@
     このファイルでは、
     <style> ～ </style> の中が CSS
     <script> ～ </script> の中が JavaScript
-    それ以外の <div> や <button> などが HTML です。
+    それ以外の <div> や <button> などが HTML
 
-    ※ 現在は Firebase（Cloud Firestore）をメインの保存先として使っています。
+    ※ 現在は Firebase（Cloud Firestore）がメインの保存先
        Mac・Windows・iPhoneなど、別の端末から同じデータを共有できます。
 
        localStorage も一部使っていますが、これは画面表示を速くするための
@@ -898,7 +898,7 @@
       <input
         id="adminId"
         autocomplete="username"
-        placeholder="自分で決めた管理者ID"
+        placeholder=" "
       >
 
       <label>管理者パスワード</label>
@@ -906,18 +906,14 @@
         id="adminPass"
         type="password"
         autocomplete="current-password"
-        placeholder="自分で決めたパスワード"
+        placeholder=" "
       >
 
       <button class="btn btn-dark" onclick="adminLogin()">
         管理者ログイン
       </button>
-
-      <div class="muted">
-        ※ 管理者IDとパスワードは自分で決められます。
-        Firebaseの裏側では、管理者IDを内部用メールアドレスに変換してログインします。
-      </div>
     </div>
+
 
   </div>
 
@@ -1070,7 +1066,7 @@
 
           <input
             id="newStaffId"
-            placeholder="例：001"
+            placeholder="例：1"
           >
 
 
@@ -1080,7 +1076,7 @@
 
           <input
             id="newStaffName"
-            placeholder="例：山田 花子"
+            placeholder="例：山田"
           >
 
 
@@ -1158,7 +1154,6 @@
 
           <div class="muted">
             30分マスは、1回クリックでも、押したまま横にドラッグでも付け外しできます。
-            希望時間外でも確認ポップアップは出しません。
           </div>
 
         </div>
