@@ -5291,34 +5291,208 @@
                     利用停止中
                   </span>
 
-                  <h4 style="margin-top:16px;">
-                    要望・伝えたいこと
-                  </h4>
+                  ${
+                    (() => {
 
-                  <div
-                    class="request-message-box"
-                  >
-                    ${
-                      (() => {
-
-                        const stoppedSubmission =
-                          getSubmittedMonthState(
-                            userId,
-                            monthKey
-                          );
+                      const stoppedSubmission =
+                        getSubmittedMonthState(
+                          userId,
+                          monthKey
+                        );
 
 
-                        return stoppedSubmission.submitted
-                          ? (
+                      const stoppedShiftData =
+                        stoppedSubmission.submitted
+                        ?
+                        stoppedSubmission.availability
+                        :
+                        {};
+
+
+                      const stoppedHopeKeys =
+                        Object
+                          .keys(
+                            stoppedShiftData
+                          )
+                          .filter(
+                            key =>
+                              key.slice(
+                                0,
+                                7
+                              )
+                              ===
+                              monthKey
+                          )
+                          .sort();
+
+
+                      const stoppedAvailableCount =
+                        stoppedHopeKeys
+                          .filter(
+                            key =>
+                              stoppedShiftData[key]
+                              &&
+                              stoppedShiftData[key].type !== "off"
+                          )
+                          .length;
+
+
+                      const stoppedOffCount =
+                        stoppedHopeKeys
+                          .filter(
+                            key =>
+                              stoppedShiftData[key]
+                              &&
+                              stoppedShiftData[key].type === "off"
+                          )
+                          .length;
+
+
+                      const stoppedHopes =
+                        stoppedHopeKeys
+                          .map(
+                            key => {
+
+                              const data =
+                                stoppedShiftData[key];
+
+
+                              let rowText =
+                                key.slice(
+                                  5
+                                )
+                                +
+                                "：";
+
+
+                              if (
+                                data.type === "off"
+                              ) {
+
+                                rowText +=
+                                  "<span class='hope-off'>希望休</span>";
+
+                              }
+
+                              else {
+
+                                rowText +=
+                                  data.available1.start
+                                  +
+                                  "〜"
+                                  +
+                                  data.available1.end;
+
+
+                                if (
+                                  data.available2
+                                ) {
+
+                                  rowText +=
+                                    " / "
+                                    +
+                                    data.available2.start
+                                    +
+                                    "〜"
+                                    +
+                                    data.available2.end;
+
+                                }
+
+                              }
+
+
+                              if (
+                                data.editedBy === "admin"
+                              ) {
+
+                                rowText +=
+                                  " <span class='admin-edited'>管理者更新</span>";
+
+                              }
+
+
+                              return (
+                                "<div class='hope-row'>"
+                                +
+                                rowText
+                                +
+                                "</div>"
+                              );
+
+                            }
+                          )
+                          .join("")
+                        ||
+                        "<div class='muted'>希望入力なし</div>";
+
+
+                      return `
+                        <h4 style="margin-top:16px;">
+                          今月の希望
+                        </h4>
+
+                        <div class="monthly-hope-summary">
+                          ${
+                            stoppedSubmission.submitted
+                            ?
+                            (
+                              "希望時間あり "
+                              +
+                              stoppedAvailableCount
+                              +
+                              "日 ／ 希望休 "
+                              +
+                              stoppedOffCount
+                              +
+                              "日"
+                            )
+                            :
+                            "未提出"
+                          }
+                        </div>
+
+                        ${
+                          stoppedSubmission.submitted
+                          ?
+                          `
+                            <details class="monthly-hope-details">
+
+                              <summary>
+                                希望シフトをすべて見る（${stoppedHopeKeys.length}件）
+                              </summary>
+
+                              <div class="monthly-hope-list">
+                                ${stoppedHopes}
+                              </div>
+
+                            </details>
+                          `
+                          :
+                          ""
+                        }
+
+                        <h4 style="margin-top:16px;">
+                          要望・伝えたいこと
+                        </h4>
+
+                        <div class="request-message-box">
+                          ${
+                            stoppedSubmission.submitted
+                            ?
+                            (
                               stoppedSubmission.message
                               ||
                               "特になし"
                             )
-                          : "未提出";
+                            :
+                            "未提出"
+                          }
+                        </div>
+                      `;
 
-                      })()
-                    }
-                  </div>
+                    })()
+                  }
 
                   <div class="staff-actions">
 
