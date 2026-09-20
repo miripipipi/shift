@@ -557,6 +557,64 @@
 
 
     /*
+      ============================================================
+      管理者画面：希望・要望表示
+      ============================================================
+    */
+    .request-message-box {
+      background: #fff8e8;
+      border-radius: 8px;
+      padding: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+    }
+
+    .monthly-hope-summary {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .monthly-hope-details {
+      margin-top: 8px;
+      padding: 9px 10px;
+      background: #f7f9fc;
+      border-radius: 8px;
+    }
+
+    .monthly-hope-details summary {
+      cursor: pointer;
+      color: #315d86;
+      font-size: 13px;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .monthly-hope-list {
+      margin-top: 9px;
+      padding-top: 7px;
+      border-top: 1px solid rgba(0,0,0,.08);
+    }
+
+    .hope-row {
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(0,0,0,.05);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .hope-row:last-child {
+      border-bottom: none;
+    }
+
+    .hope-off {
+      color: #b42318;
+      font-weight: 700;
+    }
+
+
+    /*
       固定シフト変更履歴は、
       普段は閉じた状態にして管理者カードをすっきり見せます。
       summary を押すと過去の変更内容が開きます。
@@ -4633,14 +4691,27 @@
                     利用停止中
                   </span>
 
-                  <div class="staff-actions">
+                  <h4 style="margin-top:16px;">
+                    要望・伝えたいこと
+                  </h4>
 
-                    <button
-                      class="edit-button"
-                      onclick="showAdminPinResetInfo('${userId}')"
-                    >
-                      PIN変更
-                    </button>
+                  <div
+                    class="request-message-box"
+                  >
+                    ${
+                      (
+                        monthlyMessages[userId]
+                        &&
+                        monthlyMessages[userId][monthKey]
+                      )
+                      ?
+                      monthlyMessages[userId][monthKey]
+                      :
+                      "特になし"
+                    }
+                  </div>
+
+                  <div class="staff-actions">
 
                     <button
                       class="edit-button"
@@ -4653,7 +4724,7 @@
                       class="delete-button"
                       onclick="deleteStaffDataOnly('${userId}')"
                     >
-                      データ削除
+                      完全削除
                     </button>
 
                   </div>
@@ -4892,8 +4963,14 @@
 
           /*
             今月の希望一覧を作る
+
+            管理者カードを見やすくするため、
+            最初は「希望時間あり○日 / 希望休○日」だけ表示します。
+
+            日ごとの詳細は、
+            「希望シフトをすべて見る」を押した時だけ開きます。
           */
-          const hopes =
+          const monthHopeKeys =
             Object
               .keys(
                 shiftData
@@ -4904,7 +4981,33 @@
                 ===
                 monthKey
               )
-              .sort()
+              .sort();
+
+
+          const hopeAvailableCount =
+            monthHopeKeys
+              .filter(
+                key =>
+                  shiftData[key]
+                  &&
+                  shiftData[key].type !== "off"
+              )
+              .length;
+
+
+          const hopeOffCount =
+            monthHopeKeys
+              .filter(
+                key =>
+                  shiftData[key]
+                  &&
+                  shiftData[key].type === "off"
+              )
+              .length;
+
+
+          const hopes =
+            monthHopeKeys
               .map(
                 key => {
 
@@ -4923,7 +5026,7 @@
                   ) {
 
                     text +=
-                      "希望休";
+                      "<span class='hope-off'>希望休</span>";
 
                   }
 
@@ -4965,13 +5068,20 @@
                   }
 
 
-                  return text;
+                  return (
+                    "<div class='hope-row'>"
+                    +
+                    text
+                    +
+                    "</div>"
+                  );
 
                 }
               )
-              .join("<br>")
+              .join("")
             ||
-            "希望入力なし";
+            "<div class='muted'>希望入力なし</div>";
+
 
 
           /*
@@ -5048,14 +5158,6 @@
 
 
                   <button
-                    class="edit-button"
-                    onclick="showAdminPinResetInfo('${userId}')"
-                  >
-                    PIN変更
-                  </button>
-
-
-                  <button
                     class="reset-button"
                     onclick="resetStaffShiftData('${userId}')"
                   >
@@ -5075,7 +5177,7 @@
                     class="delete-button"
                     onclick="deleteStaffDataOnly('${userId}')"
                   >
-                    データ削除
+                    完全削除
                   </button>
 
                 </div>
@@ -5085,9 +5187,23 @@
                   今月の希望
                 </h4>
 
-                <div>
-                  ${hopes}
+                <div class="monthly-hope-summary">
+                  希望時間あり ${hopeAvailableCount}日
+                  ／
+                  希望休 ${hopeOffCount}日
                 </div>
+
+                <details class="monthly-hope-details">
+
+                  <summary>
+                    希望シフトをすべて見る（${monthHopeKeys.length}件）
+                  </summary>
+
+                  <div class="monthly-hope-list">
+                    ${hopes}
+                  </div>
+
+                </details>
 
 
                 <h4 style="margin-top:16px;">
@@ -5095,12 +5211,7 @@
                 </h4>
 
                 <div
-                  style="
-                    background:#fff8e8;
-                    border-radius:8px;
-                    padding:10px;
-                    white-space:pre-wrap;
-                  "
+                  class="request-message-box"
                 >
                   ${
                     (
@@ -5260,62 +5371,11 @@
     */
     /*
       ============================================================
-      管理者：スタッフPIN変更の案内
+      管理者：完全削除
       ============================================================
 
-      無料のFirebase構成では、ブラウザから管理者が
-      他のスタッフのAuthenticationパスワードを
-      安全に直接変更することはできません。
-
-      そのため、このボタンでは対象スタッフの内部メールを表示し、
-      Firebase ConsoleのAuthentication画面で変更する方法を
-      管理者へ案内します。
-    */
-    function showAdminPinResetInfo(userId) {
-
-      const internalEmail =
-        "staff-"
-        +
-        String(userId)
-          .trim()
-          .toLowerCase()
-          .replace(
-            /[^a-z0-9._-]/g,
-            "_"
-          )
-        +
-        "@shiftapp.invalid";
-
-
-      alert(
-        "このスタッフのPINはFirebase Authenticationで変更します。\n\n"
-        +
-        "対象メール：\n"
-        +
-        internalEmail
-        +
-        "\n\n"
-        +
-        "Firebase Console → Authentication → ユーザー\n"
-        +
-        "からこのユーザーを開いて、パスワードを変更してください。"
-      );
-
-    }
-
-
-    /*
-      ============================================================
-      管理者：アプリ内データ削除
-      ============================================================
-
-      Cloud Functionsを使わない無料構成では、
-      Firebase Authenticationの他ユーザーをブラウザから
-      完全削除することはできません。
-
-      ここではFirestore上のシフトデータとプロフィールを削除します。
-      Authenticationアカウント自体を消したい場合は、
-      Firebase ConsoleのAuthentication画面で手動削除します。
+      この「完全削除」ボタンでは、
+      Firestore上のシフトデータとプロフィールを削除します。
     */
     async function deleteStaffDataOnly(userId) {
 
@@ -5329,9 +5389,9 @@
           +
           user.name
           +
-          " さんのシフトデータとプロフィールを削除します。\n\n"
+          " さんをシフト管理アプリから完全削除します。\n\n"
           +
-          "Authenticationアカウント自体は残ります。\n"
+          "希望・固定・提出・要望・確定シフトなどのデータとプロフィールを削除します。\n\n"
           +
           "本当に削除しますか？"
         );
@@ -5353,7 +5413,7 @@
         );
 
 
-        await window.firebaseBridge.deleteStaffProfile(
+        await firebase.deleteStaffProfile(
           userId
         );
 
@@ -5372,11 +5432,7 @@
 
 
         alert(
-          "アプリ内データを削除しました。\n\n"
-          +
-          "Authenticationアカウントも消したい場合は、"
-          +
-          "Firebase Console → Authentication → ユーザー から手動で削除してください。"
+          "シフト管理アプリ内のデータを完全削除しました。"
         );
 
       }
@@ -5386,7 +5442,7 @@
         console.error(error);
 
         alert(
-          "データ削除に失敗しました"
+          "完全削除に失敗しました"
         );
 
       }
@@ -5513,6 +5569,120 @@
         );
 
       }
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：1日表示 / 1週間表示の切り替え
+      ============================================================
+
+      1日表示ボタン、1週間表示ボタンを押した時に呼ばれます。
+
+      1週間表示へ切り替える時は、
+      現在選択している日を含む週の「月曜日」を
+      weekStart に設定します。
+    */
+    function setScheduleMode(mode) {
+
+      /*
+        mode は "single" または "week" のどちらかです。
+      */
+      scheduleMode =
+        mode;
+
+
+      /*
+        週表示へ切り替える場合は、
+        今見ている日が含まれる週の月曜日から表示します。
+      */
+      if (
+        scheduleMode === "week"
+      ) {
+
+        weekStart =
+          getMonday(
+            selectedScheduleDate
+          );
+
+      }
+
+
+      /*
+        上部の月表示も、
+        今表示している日・週に合わせます。
+      */
+      if (
+        scheduleMode === "single"
+      ) {
+
+        scheduleMonth =
+          new Date(
+            selectedScheduleDate.getFullYear(),
+            selectedScheduleDate.getMonth(),
+            1
+          );
+
+      }
+
+      else {
+
+        scheduleMonth =
+          new Date(
+            weekStart.getFullYear(),
+            weekStart.getMonth(),
+            1
+          );
+
+      }
+
+
+      /*
+        ボタンの見た目を切り替えます。
+      */
+      const singleBtn =
+        document.getElementById(
+          "singleBtn"
+        );
+
+
+      const weekBtn =
+        document.getElementById(
+          "weekBtn"
+        );
+
+
+      if (
+        singleBtn
+        &&
+        weekBtn
+      ) {
+
+        singleBtn.classList.toggle(
+          "active",
+          scheduleMode === "single"
+        );
+
+
+        weekBtn.classList.toggle(
+          "active",
+          scheduleMode === "week"
+        );
+
+      }
+
+
+      /*
+        実際のガント表を描き直します。
+      */
+      renderSchedule();
+
+
+      /*
+        管理者画面上部の年月表示も更新します。
+      */
+      updateAdminHeaderMonth();
 
     }
 
@@ -9221,3 +9391,73 @@
       */
       await setDoc(
         doc(
+          db,
+          "users",
+          uid
+        ),
+        {
+          active: false
+        },
+        {
+          merge: true
+        }
+      );
+
+    }
+
+
+    async function reactivateStaff(
+      staffId
+    ) {
+
+      const uid =
+        staffIdToUid[staffId];
+
+
+      if (!uid) {
+
+        throw new Error(
+          "スタッフUIDが見つかりません"
+        );
+
+      }
+
+
+      await setDoc(
+        doc(
+          db,
+          "users",
+          uid
+        ),
+        {
+          active: true
+        },
+        {
+          merge: true
+        }
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      画面側から使う機能をwindowへ公開
+      ============================================================
+    */
+    window.firebaseBridge = {
+      staffLogin,
+      adminLogin,
+      logout,
+      createStaff,
+      queueSync,
+      resetStaffData,
+      deleteStaffProfile,
+      deactivateStaff,
+      reactivateStaff
+    };
+
+  </script>
+
+</body>
+</html>
