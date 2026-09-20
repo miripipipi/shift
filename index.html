@@ -465,6 +465,37 @@
       border-color: #2699c7;
     }
 
+    /*
+      ------------------------------------------------------------
+      スタッフ画面：提出状態
+      ------------------------------------------------------------
+    */
+    .submission-status {
+      margin: 10px 0 8px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      background: #f4f4f4;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .submission-status.submitted {
+      background: #eaf7ef;
+      color: #17683b;
+    }
+
+    .submission-status.resubmit {
+      background: #fff4df;
+      color: #8a5200;
+      font-weight: 700;
+    }
+
+    .submission-status.not-submitted {
+      background: #f4f4f4;
+      color: #666;
+    }
+
+
     /* 提出済み / 未提出 */
     .badge {
       display: inline-block;
@@ -1110,7 +1141,24 @@
       </div>
 
 
-      <button class="btn btn-primary" onclick="submitMonth()">
+      <!--
+        今月の提出状態をここに表示します。
+
+        例：
+        ・未提出
+        ・✓ 提出済み
+        ・変更があります → 再提出してください
+      -->
+      <div
+        id="staffSubmissionStatus"
+        class="submission-status"
+      ></div>
+
+      <button
+        id="submitMonthButton"
+        class="btn btn-primary"
+        onclick="submitMonth()"
+      >
         この月の希望を提出
       </button>
 
@@ -3345,6 +3393,439 @@
       */
       loadMonthlyMessage();
 
+      /*
+        月を切り替えた時も、
+        その月の提出状態を表示し直します。
+      */
+      updateStaffSubmissionUI();
+
+    }
+
+
+    /*
+      ============================================================
+      提出状態の共通処理
+      ============================================================
+
+      古い版では、
+
+        submissions["001"]["2026-09"] = true
+
+      のように true / false だけで保存していました。
+
+      今回からは、
+
+        {
+          submitted: true,
+          submittedAt: "...",
+          lastUpdatedAt: "...",
+          needsResubmit: false
+        }
+
+      のように保存します。
+
+      古い true データもそのまま使えるようにしています。
+    */
+    function normalizeSubmission(value) {
+
+      if (
+        value === true
+      ) {
+
+        return {
+          submitted: true,
+          submittedAt: null,
+          lastUpdatedAt: null,
+          needsResubmit: false,
+          availability: {},
+          message: ""
+        };
+
+      }
+
+
+      if (
+        value
+        &&
+        typeof value === "object"
+      ) {
+
+        return {
+          submitted:
+            Boolean(value.submitted),
+
+          submittedAt:
+            value.submittedAt
+            ||
+            null,
+
+          lastUpdatedAt:
+            value.lastUpdatedAt
+            ||
+            value.submittedAt
+            ||
+            null,
+
+          needsResubmit:
+            Boolean(value.needsResubmit),
+
+          /*
+            提出ボタンを押した瞬間の希望シフト。
+            スタッフがあとから下書きを変更しても、
+            管理者はこの提出済みコピーを見るため
+            内容が勝手に変わりません。
+          */
+          availability:
+            (
+              value.availability
+              &&
+              typeof value.availability === "object"
+            )
+            ?
+            value.availability
+            :
+            {},
+
+          /*
+            提出ボタンを押した瞬間の
+            「要望・伝えたいこと」。
+          */
+          message:
+            typeof value.message === "string"
+            ?
+            value.message
+            :
+            ""
+        };
+
+      }
+
+
+      return {
+        submitted: false,
+        submittedAt: null,
+        lastUpdatedAt: null,
+        needsResubmit: false,
+        availability: {},
+        message: ""
+      };
+
+    }
+
+
+    /*
+      ============================================================
+      管理者が見る「提出済み希望」の取得
+      ============================================================
+
+      スタッフが入力中の allShiftData は下書きです。
+      管理者は submissions の中に保存された
+      「最後に提出されたコピー」だけを見ます。
+    */
+    function getSubmittedMonthState(
+      userId,
+      monthKey
+    ) {
+
+      return normalizeSubmission(
+        submissions[userId]
+        &&
+        submissions[userId][monthKey]
+      );
+
+    }
+
+
+    function getAdminSubmittedDayData(
+      userId,
+      dateKey
+    ) {
+
+      const monthKey =
+        dateKey.slice(
+          0,
+          7
+        );
+
+
+      const state =
+        getSubmittedMonthState(
+          userId,
+          monthKey
+        );
+
+
+      if (
+        !state.submitted
+      ) {
+
+        return null;
+
+      }
+
+
+      return (
+        state.availability[
+          dateKey
+        ]
+        ||
+        null
+      );
+
+    }
+
+
+    /*
+      ISO形式の日時を
+      「9/20 14:10」のように表示します。
+    */
+    function formatUpdateTime(value) {
+
+      if (!value) {
+        return "";
+      }
+
+
+      const date =
+        new Date(value);
+
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return "";
+
+      }
+
+
+      return new Intl.DateTimeFormat(
+        "ja-JP",
+        {
+          timeZone: "Asia/Tokyo",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }
+      ).format(date);
+
+    }
+
+
+    /*
+      スタッフが「提出後」に希望や要望を変更したら、
+      「再提出が必要」の状態にします。
+
+      未提出の時も lastUpdatedAt は記録しておくので、
+      管理者は最後に編集された時間を確認できます。
+    */
+    function markCurrentMonthChanged() {
+
+      if (
+        !currentUser
+      ) {
+
+        return;
+
+      }
+
+
+      const monthKey =
+        fmtMonth(
+          currentMonth
+        );
+
+
+      submissions[
+        currentUser.id
+      ] ??=
+        {};
+
+
+      const state =
+        normalizeSubmission(
+          submissions[
+            currentUser.id
+          ][monthKey]
+        );
+
+
+      state.lastUpdatedAt =
+        new Date().toISOString();
+
+
+      if (
+        state.submitted
+      ) {
+
+        state.needsResubmit =
+          true;
+
+      }
+
+
+      submissions[
+        currentUser.id
+      ][monthKey] =
+        state;
+
+
+      save(
+        "shiftAppSubmissions",
+        submissions
+      );
+
+
+      updateStaffSubmissionUI();
+
+    }
+
+
+    /*
+      スタッフ画面上で、
+      「未提出 / 提出済み / 再提出が必要」
+      を分かりやすく表示します。
+    */
+    function updateStaffSubmissionUI() {
+
+      if (
+        !currentUser
+      ) {
+
+        return;
+
+      }
+
+
+      const status =
+        document.getElementById(
+          "staffSubmissionStatus"
+        );
+
+
+      const button =
+        document.getElementById(
+          "submitMonthButton"
+        );
+
+
+      if (
+        !status
+        ||
+        !button
+      ) {
+
+        return;
+
+      }
+
+
+      const monthKey =
+        fmtMonth(
+          currentMonth
+        );
+
+
+      const state =
+        normalizeSubmission(
+          submissions[
+            currentUser.id
+          ]
+          &&
+          submissions[
+            currentUser.id
+          ][monthKey]
+        );
+
+
+      const updateText =
+        state.lastUpdatedAt
+        ? (
+            "最終更新 "
+            +
+            formatUpdateTime(
+              state.lastUpdatedAt
+            )
+          )
+        : "";
+
+
+      if (
+        state.submitted
+        &&
+        state.needsResubmit
+      ) {
+
+        status.className =
+          "submission-status resubmit";
+
+
+        status.innerHTML =
+          "提出後に変更があります。再提出してください。"
+          +
+          (
+            updateText
+            ? "<br>" + updateText
+            : ""
+          );
+
+
+        button.textContent =
+          "変更内容を再提出";
+
+      }
+
+      else if (
+        state.submitted
+      ) {
+
+        status.className =
+          "submission-status submitted";
+
+
+        status.innerHTML =
+          "✓ 提出済み"
+          +
+          (
+            updateText
+            ? "<br>" + updateText
+            : ""
+          );
+
+
+        button.textContent =
+          "この月の希望を再提出";
+
+      }
+
+      else {
+
+        status.className =
+          "submission-status not-submitted";
+
+
+        status.innerHTML =
+          "未提出"
+          +
+          (
+            updateText
+            ? "<br>下書き最終更新 "
+              + formatUpdateTime(
+                  state.lastUpdatedAt
+                )
+            : ""
+          );
+
+
+        button.textContent =
+          "この月の希望を提出";
+
+      }
+
     }
 
 
@@ -3407,7 +3888,9 @@
       oninput="saveMonthlyMessageDraft()"
       から呼ばれます。
     */
-    function saveMonthlyMessageDraft() {
+    function saveMonthlyMessageDraft(
+      markChanged = true
+    ) {
 
       if (!currentUser) {
         return;
@@ -3441,6 +3924,22 @@
         "shiftAppMonthlyMessages",
         monthlyMessages
       );
+
+
+      /*
+        スタッフが実際に入力して変更した時だけ、
+        再提出状態へ切り替えます。
+
+        submitMonth() から保存する時は false を渡すので、
+        提出直前に再提出状態にはなりません。
+      */
+      if (
+        markChanged
+      ) {
+
+        markCurrentMonthChanged();
+
+      }
 
     }
 
@@ -3740,6 +4239,13 @@
       );
 
 
+      /*
+        すでに提出済みだった場合は、
+        「変更があります → 再提出」に切り替えます。
+      */
+      markCurrentMonthChanged();
+
+
       closeModal("dayModal");
 
       renderMonth();
@@ -3763,6 +4269,13 @@
         "shiftAppShiftData",
         allShiftData
       );
+
+
+      /*
+        すでに提出済みだった場合は、
+        「変更があります → 再提出」に切り替えます。
+      */
+      markCurrentMonthChanged();
 
 
       closeModal("dayModal");
@@ -4207,10 +4720,13 @@
 
 
       /*
-        念のため、提出ボタンを押した瞬間にも
-        要望欄の内容を保存します。
+        提出ボタンを押した瞬間にも要望欄を保存します。
+        false を渡すことで、
+        この保存自体では「変更あり」にしません。
       */
-      saveMonthlyMessageDraft();
+      saveMonthlyMessageDraft(
+        false
+      );
 
 
       submissions[
@@ -4219,16 +4735,100 @@
         {};
 
 
+      const now =
+        new Date().toISOString();
+
+
+      /*
+        ========================================================
+        提出時点の下書きをコピー
+        ========================================================
+
+        allShiftData はスタッフが編集中の「下書き」です。
+
+        ここで今月分だけコピーして submissions に入れることで、
+        この後スタッフが下書きを変更しても、
+        管理者画面は前回提出された内容のままになります。
+      */
+      const submittedAvailability =
+        {};
+
+
+      Object
+        .entries(
+          allShiftData[
+            currentUser.id
+          ]
+          ||
+          {}
+        )
+        .forEach(
+          ([dateKey, dayData]) => {
+
+            if (
+              dateKey.slice(
+                0,
+                7
+              )
+              ===
+              monthKey
+            ) {
+
+              submittedAvailability[
+                dateKey
+              ] =
+                JSON.parse(
+                  JSON.stringify(
+                    dayData
+                  )
+                );
+
+            }
+
+          }
+        );
+
+
+      const submittedMessage =
+        (
+          monthlyMessages[
+            currentUser.id
+          ]
+          &&
+          monthlyMessages[
+            currentUser.id
+          ][monthKey]
+        )
+        ||
+        "";
+
+
+      /*
+        初回提出でも再提出でも、
+        この瞬間の内容を「管理者が見る提出済みデータ」にします。
+      */
       submissions[
         currentUser.id
       ][monthKey] =
-        true;
+        {
+          submitted: true,
+          submittedAt: now,
+          lastUpdatedAt: now,
+          needsResubmit: false,
+          availability:
+            submittedAvailability,
+          message:
+            submittedMessage
+        };
 
 
       save(
         "shiftAppSubmissions",
         submissions
       );
+
+
+      updateStaffSubmissionUI();
 
 
       alert(
@@ -4699,15 +5299,24 @@
                     class="request-message-box"
                   >
                     ${
-                      (
-                        monthlyMessages[userId]
-                        &&
-                        monthlyMessages[userId][monthKey]
-                      )
-                      ?
-                      monthlyMessages[userId][monthKey]
-                      :
-                      "特になし"
+                      (() => {
+
+                        const stoppedSubmission =
+                          getSubmittedMonthState(
+                            userId,
+                            monthKey
+                          );
+
+
+                        return stoppedSubmission.submitted
+                          ? (
+                              stoppedSubmission.message
+                              ||
+                              "特になし"
+                            )
+                          : "未提出";
+
+                      })()
                     }
                   </div>
 
@@ -4798,16 +5407,42 @@
               : (allFixedShifts[userId] || {});
 
 
+          const submissionState =
+            getSubmittedMonthState(
+              userId,
+              monthKey
+            );
+
+
+          /*
+            管理者カードに表示する希望は、
+            スタッフの編集中データではなく
+            最後に提出されたコピーだけです。
+          */
           const shiftData =
-            allShiftData[userId]
-            ||
+            submissionState.submitted
+            ?
+            submissionState.availability
+            :
             {};
 
 
           const submitted =
-            submissions[userId]
-            &&
-            submissions[userId][monthKey];
+            submissionState.submitted;
+
+
+          const needsResubmit =
+            submissionState.needsResubmit;
+
+
+          const lastUpdatedText =
+            submissionState.lastUpdatedAt
+            ?
+            formatUpdateTime(
+              submissionState.lastUpdatedAt
+            )
+            :
+            "";
 
 
           /*
@@ -5104,6 +5739,8 @@
                     badge
                     ${
                       submitted
+                      &&
+                      !needsResubmit
                       ? "ok"
                       : "no"
                     }
@@ -5111,10 +5748,26 @@
                 >
                   ${
                     submitted
-                    ? "✓ 提出済み"
-                    : "未提出"
+                    &&
+                    needsResubmit
+                    ? "再提出待ち（前回提出分を表示）"
+                    : (
+                        submitted
+                        ? "✓ 提出済み"
+                        : "未提出"
+                      )
                   }
                 </span>
+
+                ${
+                  lastUpdatedText
+                  ? `
+                    <div class="muted" style="margin-top:5px;">
+                      最終更新 ${lastUpdatedText}
+                    </div>
+                  `
+                  : ""
+                }
 
 
                 <h4 style="margin-top:14px;">
@@ -5214,15 +5867,15 @@
                   class="request-message-box"
                 >
                   ${
-                    (
-                      monthlyMessages[userId]
-                      &&
-                      monthlyMessages[userId][monthKey]
-                    )
+                    submissionState.submitted
                     ?
-                    monthlyMessages[userId][monthKey]
+                    (
+                      submissionState.message
+                      ||
+                      "特になし"
+                    )
                     :
-                    "特になし"
+                    "未提出"
                   }
                 </div>
 
@@ -6442,12 +7095,17 @@
               users[userId];
 
 
+            /*
+              管理者の日付・週別画面も、
+              スタッフが最後に提出した希望だけを表示します。
+
+              下書きを保存しただけでは、ここには出ません。
+            */
             const data =
-              (
-                allShiftData[userId]
-                ||
-                {}
-              )[dateKey];
+              getAdminSubmittedDayData(
+                userId,
+                dateKey
+              );
 
 
             /*
@@ -7466,12 +8124,16 @@
         fmtDate(date);
 
 
+      /*
+        管理者が編集するのは、
+        スタッフの下書きではなく
+        「提出済みの希望」です。
+      */
       const data =
-        (
-          allShiftData[userId]
-          ||
-          {}
-        )[adminEditingDateKey];
+        getAdminSubmittedDayData(
+          userId,
+          adminEditingDateKey
+        );
 
 
       adminEditingType =
@@ -7608,7 +8270,45 @@
         adminEditingDateKey;
 
 
-      allShiftData[userId] ??= {};
+      const monthKey =
+        dateKey.slice(
+          0,
+          7
+        );
+
+
+      submissions[
+        userId
+      ] ??=
+        {};
+
+
+      const state =
+        getSubmittedMonthState(
+          userId,
+          monthKey
+        );
+
+
+      /*
+        まだ提出されていない月は、
+        管理者側から希望変更できないようにします。
+      */
+      if (
+        !state.submitted
+      ) {
+
+        alert(
+          "この月の希望はまだ提出されていません"
+        );
+
+        return;
+
+      }
+
+
+      state.availability ??=
+        {};
 
 
       /*
@@ -7619,25 +8319,20 @@
       ) {
 
         const old =
-          allShiftData[userId][dateKey]
+          state.availability[
+            dateKey
+          ]
           ||
           {};
 
 
-        /*
-          古いバージョンの fixedOverride が
-          もし残っていても、ここで消してから保存します。
-        */
         delete old.fixedOverride;
 
 
-        allShiftData[userId][dateKey] = {
+        state.availability[
+          dateKey
+        ] = {
 
-          /*
-            ...old は、
-            元データに fixedOverride などがあれば
-            消さずに残すための書き方です。
-          */
           ...old,
 
           type: "off",
@@ -7705,19 +8400,19 @@
 
 
         const old =
-          allShiftData[userId][dateKey]
+          state.availability[
+            dateKey
+          ]
           ||
           {};
 
 
-        /*
-          古いバージョンの fixedOverride が
-          もし残っていても、ここで消してから保存します。
-        */
         delete old.fixedOverride;
 
 
-        allShiftData[userId][dateKey] = {
+        state.availability[
+          dateKey
+        ] = {
 
           ...old,
 
@@ -7747,9 +8442,24 @@
       }
 
 
+      /*
+        管理者変更も「最終更新」に反映します。
+        再提出待ちにはしません。
+      */
+      state.lastUpdatedAt =
+        new Date()
+          .toISOString();
+
+
+      submissions[
+        userId
+      ][monthKey] =
+        state;
+
+
       save(
-        "shiftAppShiftData",
-        allShiftData
+        "shiftAppSubmissions",
+        submissions
       );
 
 
@@ -8136,7 +8846,45 @@
               ([key, value]) =>
               [
                 key,
-                Boolean(value.submitted)
+                {
+                  submitted:
+                    Boolean(value.submitted),
+
+                  submittedAt:
+                    value.submittedAt
+                    ||
+                    null,
+
+                  lastUpdatedAt:
+                    value.lastUpdatedAt
+                    ||
+                    value.submittedAt
+                    ||
+                    null,
+
+                  needsResubmit:
+                    Boolean(
+                      value.needsResubmit
+                    ),
+
+                  availability:
+                    (
+                      value.availability
+                      &&
+                      typeof value.availability === "object"
+                    )
+                    ?
+                    value.availability
+                    :
+                    {},
+
+                  message:
+                    typeof value.message === "string"
+                    ?
+                    value.message
+                    :
+                    ""
+                }
               ]
             )
         );
@@ -8429,10 +9177,53 @@
 
             snapshot.forEach(
               item => {
-                map[item.id] =
-                  Boolean(
-                    item.data().submitted
-                  );
+
+                const data =
+                  item.data();
+
+
+                map[item.id] = {
+                  submitted:
+                    Boolean(
+                      data.submitted
+                    ),
+
+                  submittedAt:
+                    data.submittedAt
+                    ||
+                    null,
+
+                  lastUpdatedAt:
+                    data.lastUpdatedAt
+                    ||
+                    data.submittedAt
+                    ||
+                    null,
+
+                  needsResubmit:
+                    Boolean(
+                      data.needsResubmit
+                    ),
+
+                  availability:
+                    (
+                      data.availability
+                      &&
+                      typeof data.availability === "object"
+                    )
+                    ?
+                    data.availability
+                    :
+                    {},
+
+                  message:
+                    typeof data.message === "string"
+                    ?
+                    data.message
+                    :
+                    ""
+                };
+
               }
             );
 
@@ -9173,10 +9964,69 @@
             uid,
             "submissions",
             value,
-            item => ({
-              submitted:
-                Boolean(item)
-            })
+            item => {
+
+              /*
+                古い true / false 形式にも対応します。
+              */
+              const state =
+                (
+                  item
+                  &&
+                  typeof item === "object"
+                )
+                ?
+                item
+                :
+                {
+                  submitted:
+                    Boolean(item)
+                };
+
+
+              return {
+                submitted:
+                  Boolean(
+                    state.submitted
+                  ),
+
+                submittedAt:
+                  state.submittedAt
+                  ||
+                  null,
+
+                lastUpdatedAt:
+                  state.lastUpdatedAt
+                  ||
+                  state.submittedAt
+                  ||
+                  null,
+
+                needsResubmit:
+                  Boolean(
+                    state.needsResubmit
+                  ),
+
+                availability:
+                  (
+                    state.availability
+                    &&
+                    typeof state.availability === "object"
+                  )
+                  ?
+                  state.availability
+                  :
+                  {},
+
+                message:
+                  typeof state.message === "string"
+                  ?
+                  state.message
+                  :
+                  ""
+              };
+
+            }
           );
 
         }
