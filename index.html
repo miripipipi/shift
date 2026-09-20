@@ -18,9 +18,9 @@
     このファイルでは、
     <style> ～ </style> の中が CSS
     <script> ～ </script> の中が JavaScript
-    それ以外の <div> や <button> などが HTML
+    それ以外の <div> や <button> などが HTML です。
 
-    ※ 現在は Firebase（Cloud Firestore）がメインの保存先
+    ※ 現在は Firebase（Cloud Firestore）をメインの保存先として使っています。
        Mac・Windows・iPhoneなど、別の端末から同じデータを共有できます。
 
        localStorage も一部使っていますが、これは画面表示を速くするための
@@ -556,7 +556,11 @@
     }
 
 
-    /* 固定シフトの変更履歴を見やすく表示 */
+    /*
+      固定シフト変更履歴は、
+      普段は閉じた状態にして管理者カードをすっきり見せます。
+      summary を押すと過去の変更内容が開きます。
+    */
     .fixed-history {
       margin-top: 8px;
       padding: 10px;
@@ -566,8 +570,27 @@
       line-height: 1.7;
     }
 
+    .fixed-history summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: #315d86;
+      user-select: none;
+    }
+
+    .fixed-history-content {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(49, 93, 134, 0.18);
+    }
+
     .fixed-history strong {
       color: #315d86;
+    }
+
+    .fixed-history-empty {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #777;
     }
 
     /* ガントチャート左側の小さい操作ボタン */
@@ -820,6 +843,43 @@
     }
 
     /*
+      ============================================================
+      Firebaseの保存状態表示
+      ============================================================
+      右下に小さく、
+      「保存中…」「✓ 保存済み」「⚠ 保存できません」
+      を表示します。
+    */
+    .sync-status {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 5000;
+      display: none;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 2px 10px rgba(0,0,0,.12);
+      font-size: 12px;
+      font-weight: 700;
+      color: #555;
+      pointer-events: none;
+    }
+
+    .sync-status.saving {
+      display: block;
+    }
+
+    .sync-status.saved {
+      display: block;
+    }
+
+    .sync-status.error {
+      display: block;
+      color: #b42318;
+    }
+
+    /*
       小さいスマホだけ少し詰める
     */
     @media(max-width: 390px) {
@@ -841,6 +901,9 @@
 
 
 <body>
+
+  <!-- Firebaseへの保存状態。ログイン後だけ必要に応じて表示します。 -->
+  <div id="syncStatus" class="sync-status"></div>
 
   <!--
     ============================================================
@@ -898,7 +961,7 @@
       <input
         id="adminId"
         autocomplete="username"
-        placeholder=" "
+        
       >
 
       <label>管理者パスワード</label>
@@ -906,14 +969,14 @@
         id="adminPass"
         type="password"
         autocomplete="current-password"
-        placeholder=" "
+        
       >
 
       <button class="btn btn-dark" onclick="adminLogin()">
         管理者ログイン
       </button>
-    </div>
 
+    </div>
 
   </div>
 
@@ -993,6 +1056,9 @@
         この月の希望を提出
       </button>
 
+
+
+
     </div>
 
   </div>
@@ -1066,7 +1132,7 @@
 
           <input
             id="newStaffId"
-            placeholder="例：1"
+            placeholder="例：001"
           >
 
 
@@ -1076,7 +1142,7 @@
 
           <input
             id="newStaffName"
-            placeholder="例：山田"
+            placeholder="例：山田 花子"
           >
 
 
@@ -1154,6 +1220,7 @@
 
           <div class="muted">
             30分マスは、1回クリックでも、押したまま横にドラッグでも付け外しできます。
+            
           </div>
 
         </div>
@@ -1847,6 +1914,86 @@
       ページを開いた時に1回だけ実行
     */
     removeOldStaffFixedOverrides();
+
+
+    /*
+      ============================================================
+      Firebase保存状態を画面に表示
+      ============================================================
+    */
+    let syncStatusHideTimer = null;
+
+
+    function setSyncStatus(type, message) {
+
+      const el =
+        document.getElementById("syncStatus");
+
+
+      if (!el) {
+        return;
+      }
+
+
+      clearTimeout(
+        syncStatusHideTimer
+      );
+
+
+      el.className =
+        "sync-status " + type;
+
+
+      el.textContent =
+        message;
+
+
+      /*
+        「保存済み」は少し見せたあと自動で消します。
+        エラーは気づけるように長めに残します。
+      */
+      if (
+        type === "saved"
+      ) {
+
+        syncStatusHideTimer =
+          setTimeout(
+            () => {
+              el.style.display = "none";
+            },
+            1800
+          );
+
+      }
+
+      else if (
+        type === "error"
+      ) {
+
+        syncStatusHideTimer =
+          setTimeout(
+            () => {
+              el.style.display = "none";
+            },
+            7000
+          );
+
+      }
+
+      else {
+
+        el.style.display = "block";
+
+      }
+
+    }
+
+
+    /*
+      Firebase側のmodule scriptからも呼べるようにします。
+    */
+    window.setSyncStatus =
+      setSyncStatus;
 
 
     /*
@@ -4283,9 +4430,24 @@
         users[id]
       ) {
 
-        alert(
-          "そのスタッフ番号はすでに登録されています"
-        );
+        if (
+          users[id].active === false
+        ) {
+
+          alert(
+            "そのスタッフ番号は利用停止中です。\nスタッフ一覧の「利用を再開」を押してください。"
+          );
+
+        }
+
+        else {
+
+          alert(
+            "そのスタッフ番号はすでに登録されています"
+          );
+
+        }
+
 
         return;
 
@@ -4381,8 +4543,43 @@
       container.innerHTML = "";
 
 
+      /*
+        利用中スタッフを先、利用停止中スタッフを後に並べます。
+      */
       const userIds =
-        Object.keys(users);
+        Object.keys(users)
+          .sort(
+            (a, b) => {
+
+              const activeA =
+                users[a].active !== false
+                  ? 0
+                  : 1;
+
+
+              const activeB =
+                users[b].active !== false
+                  ? 0
+                  : 1;
+
+
+              if (
+                activeA !== activeB
+              ) {
+
+                return activeA - activeB;
+
+              }
+
+
+              return String(a)
+                .localeCompare(
+                  String(b),
+                  "ja"
+                );
+
+            }
+          );
 
 
       if (
@@ -4408,10 +4605,126 @@
             users[userId];
 
 
+          /*
+            利用停止中のスタッフは、
+            シフト編集ボタンを出さず、
+            「利用再開」だけできる小さなカードにします。
+
+            データ自体はFirebaseに残してあるので、
+            利用再開すると以前の固定・希望・確定シフトを
+            そのまま確認できます。
+          */
+          if (
+            user.active === false
+          ) {
+
+            container.insertAdjacentHTML(
+              "beforeend",
+              `
+                <div class="admin-card" style="opacity:.72;">
+
+                  <b>${user.name}</b>
+
+                  <div class="muted">
+                    スタッフ番号：${user.id}
+                  </div>
+
+                  <span class="badge no">
+                    利用停止中
+                  </span>
+
+                  <div class="staff-actions">
+
+                    <button
+                      class="edit-button"
+                      onclick="showAdminPinResetInfo('${userId}')"
+                    >
+                      PIN変更
+                    </button>
+
+                    <button
+                      class="edit-button"
+                      onclick="reactivateStaff('${userId}')"
+                    >
+                      利用を再開
+                    </button>
+
+                    <button
+                      class="delete-button"
+                      onclick="deleteStaffDataOnly('${userId}')"
+                    >
+                      データ削除
+                    </button>
+
+                  </div>
+
+                </div>
+              `
+            );
+
+
+            return;
+
+          }
+
+
+          /*
+            管理者カード上部の「固定シフト」は、
+            古い allFixedShifts だけを見るのではなく、
+            今表示している月の月初時点で有効な
+            fixedShiftVersions（固定シフト変更履歴）から表示します。
+
+            例：
+            2026-09-01 から新しい固定シフト
+            → 2026年9月の管理者画面では、その固定を表示
+
+            まだ変更履歴がない古いスタッフだけ、
+            allFixedShifts を予備として使います。
+          */
+          const adminMonthStart =
+            new Date(
+              adminMonth.getFullYear(),
+              adminMonth.getMonth(),
+              1
+            );
+
+
+          const adminMonthStartKey =
+            fmtDate(adminMonthStart);
+
+
+          const applicableFixedVersions =
+            (
+              fixedShiftVersions[userId]
+              ||
+              []
+            )
+              .filter(
+                version =>
+                  version.effectiveFrom <=
+                  adminMonthStartKey
+              )
+              .slice()
+              .sort(
+                (a, b) =>
+                  a.effectiveFrom.localeCompare(
+                    b.effectiveFrom
+                  )
+              );
+
+
+          const latestFixedVersion =
+            applicableFixedVersions.length > 0
+              ? applicableFixedVersions[
+                  applicableFixedVersions.length - 1
+                ]
+              : null;
+
+
           const fixedData =
-            allFixedShifts[userId]
-            ||
-            {};
+            latestFixedVersion
+              ? (latestFixedVersion.weekdays || {})
+              : (allFixedShifts[userId] || {});
 
 
           const shiftData =
@@ -4471,10 +4784,13 @@
 
 
           /*
-            「いつから固定が変わったか」の履歴を表示する文章。
+            「いつから固定が変わったか」の履歴を作ります。
 
-            変更履歴がなければ、
-            「変更履歴なし」と表示します。
+            履歴は管理者カード上では最初は閉じた状態です。
+            「固定シフト変更履歴を見る」を押した時だけ開きます。
+
+            また、履歴が増えても探しやすいように
+            新しい変更を上に表示します。
           */
           const versions =
             fixedShiftVersions[userId]
@@ -4501,9 +4817,9 @@
               .slice()
               .sort(
                 (a, b) =>
-                a.effectiveFrom.localeCompare(
-                  b.effectiveFrom
-                )
+                  b.effectiveFrom.localeCompare(
+                    a.effectiveFrom
+                  )
               )
               .forEach(
                 version => {
@@ -4700,10 +5016,25 @@
                 </div>
 
 
-                <div class="fixed-history">
-                  <b>固定シフト変更履歴</b><br>
-                  ${fixedHistoryText}
-                </div>
+                ${
+                  versions.length > 0
+                    ? `
+                      <details class="fixed-history">
+                        <summary>
+                          固定シフト変更履歴を見る（${versions.length}件）
+                        </summary>
+
+                        <div class="fixed-history-content">
+                          ${fixedHistoryText}
+                        </div>
+                      </details>
+                    `
+                    : `
+                      <div class="fixed-history-empty">
+                        固定シフト変更履歴なし
+                      </div>
+                    `
+                }
 
 
                 <div class="staff-actions">
@@ -4713,6 +5044,14 @@
                     onclick="openFixedForAdmin('${userId}')"
                   >
                     固定シフトを変更
+                  </button>
+
+
+                  <button
+                    class="edit-button"
+                    onclick="showAdminPinResetInfo('${userId}')"
+                  >
+                    PIN変更
                   </button>
 
 
@@ -4728,7 +5067,15 @@
                     class="delete-button"
                     onclick="deleteStaff('${userId}')"
                   >
-                    スタッフ利用停止
+                    利用停止
+                  </button>
+
+
+                  <button
+                    class="delete-button"
+                    onclick="deleteStaffDataOnly('${userId}')"
+                  >
+                    データ削除
                   </button>
 
                 </div>
@@ -4911,6 +5258,142 @@
       同じスタッフ番号は、
       削除後なら管理者がもう一度登録できます。
     */
+    /*
+      ============================================================
+      管理者：スタッフPIN変更の案内
+      ============================================================
+
+      無料のFirebase構成では、ブラウザから管理者が
+      他のスタッフのAuthenticationパスワードを
+      安全に直接変更することはできません。
+
+      そのため、このボタンでは対象スタッフの内部メールを表示し、
+      Firebase ConsoleのAuthentication画面で変更する方法を
+      管理者へ案内します。
+    */
+    function showAdminPinResetInfo(userId) {
+
+      const internalEmail =
+        "staff-"
+        +
+        String(userId)
+          .trim()
+          .toLowerCase()
+          .replace(
+            /[^a-z0-9._-]/g,
+            "_"
+          )
+        +
+        "@shiftapp.invalid";
+
+
+      alert(
+        "このスタッフのPINはFirebase Authenticationで変更します。\n\n"
+        +
+        "対象メール：\n"
+        +
+        internalEmail
+        +
+        "\n\n"
+        +
+        "Firebase Console → Authentication → ユーザー\n"
+        +
+        "からこのユーザーを開いて、パスワードを変更してください。"
+      );
+
+    }
+
+
+    /*
+      ============================================================
+      管理者：アプリ内データ削除
+      ============================================================
+
+      Cloud Functionsを使わない無料構成では、
+      Firebase Authenticationの他ユーザーをブラウザから
+      完全削除することはできません。
+
+      ここではFirestore上のシフトデータとプロフィールを削除します。
+      Authenticationアカウント自体を消したい場合は、
+      Firebase ConsoleのAuthentication画面で手動削除します。
+    */
+    async function deleteStaffDataOnly(userId) {
+
+      const user =
+        users[userId];
+
+
+      const ok =
+        confirm(
+          "【データ削除】\n"
+          +
+          user.name
+          +
+          " さんのシフトデータとプロフィールを削除します。\n\n"
+          +
+          "Authenticationアカウント自体は残ります。\n"
+          +
+          "本当に削除しますか？"
+        );
+
+
+      if (!ok) {
+        return;
+      }
+
+
+      try {
+
+        /*
+          既存のresetStaffDataで各サブコレクションを削除し、
+          そのあとusersプロフィールを削除します。
+        */
+        await window.firebaseBridge.resetStaffData(
+          userId
+        );
+
+
+        await window.firebaseBridge.deleteStaffProfile(
+          userId
+        );
+
+
+        delete users[userId];
+        delete allShiftData[userId];
+        delete allFixedShifts[userId];
+        delete fixedShiftVersions[userId];
+        delete irregularFixedShifts[userId];
+        delete submissions[userId];
+        delete monthlyMessages[userId];
+        delete confirmedShifts[userId];
+
+
+        renderAdmin();
+
+
+        alert(
+          "アプリ内データを削除しました。\n\n"
+          +
+          "Authenticationアカウントも消したい場合は、"
+          +
+          "Firebase Console → Authentication → ユーザー から手動で削除してください。"
+        );
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        alert(
+          "データ削除に失敗しました"
+        );
+
+      }
+
+    }
+
+
     async function deleteStaff(userId) {
 
       const user =
@@ -4923,11 +5406,13 @@
           +
           " さんの利用を停止します。\n\n"
           +
-          "希望・固定・確定シフトなどのデータも削除します。\n\n"
+          "利用停止中はスタッフ本人はログインできません。\n"
           +
-          "このスタッフは以後ログインしてもデータへアクセスできません。\n"
+          "希望・固定・確定シフトなどのデータは削除せず残します。\n\n"
           +
-          "本当に利用停止しますか？"
+          "あとから管理者画面で利用再開できます。\n"
+          +
+          "よろしいですか？"
         );
 
 
@@ -4938,20 +5423,26 @@
 
       try {
 
-        /*
-          ブラウザだけでは、管理者が別ユーザーの
-          Firebase Authenticationアカウント自体を完全削除できません。
-
-          そのためここでは、
-          Firestoreのスタッフ登録とデータを削除して
-          「利用停止」にします。
-
-          Security Rulesでもusers文書がないスタッフは
-          データへアクセスできないようにします。
-        */
         await window.firebaseBridge.deactivateStaff(
           userId
         );
+
+
+        /*
+          Firebaseのリアルタイム反映を待たなくても
+          すぐ画面が切り替わるよう、手元の状態も更新します。
+        */
+        users[userId].active =
+          false;
+
+
+        save(
+          "shiftAppUsers",
+          users
+        );
+
+
+        renderAdmin();
 
       }
 
@@ -4963,145 +5454,65 @@
           "利用停止処理に失敗しました"
         );
 
-        return;
-
       }
-
-
-      delete users[userId];
-      delete allShiftData[userId];
-      delete allFixedShifts[userId];
-      delete fixedShiftVersions[userId];
-      delete irregularFixedShifts[userId];
-      delete submissions[userId];
-      delete confirmedShifts[userId];
-      delete monthlyMessages[userId];
-
-
-      save(
-        "shiftAppUsers",
-        users
-      );
-
-
-      save(
-        "shiftAppShiftData",
-        allShiftData
-      );
-
-
-      save(
-        "shiftAppFixedShifts",
-        allFixedShifts
-      );
-
-
-      save(
-        "shiftAppFixedShiftVersions",
-        fixedShiftVersions
-      );
-
-
-      save(
-        "shiftAppIrregularFixedShifts",
-        irregularFixedShifts
-      );
-
-
-      save(
-        "shiftAppSubmissions",
-        submissions
-      );
-
-
-      save(
-        "shiftAppConfirmed",
-        confirmedShifts
-      );
-
-
-      save(
-        "shiftAppMonthlyMessages",
-        monthlyMessages
-      );
-
-
-      renderAdmin();
 
     }
 
 
     /*
       ============================================================
-      1日表示 / 1週間表示の切り替え
+      管理者：利用停止中スタッフを再開
       ============================================================
     */
-    function setScheduleMode(mode) {
+    async function reactivateStaff(userId) {
 
-      scheduleMode = mode;
+      const user =
+        users[userId];
 
 
-      document
-        .getElementById("singleBtn")
-        .classList
-        .toggle(
-          "active",
-          mode === "single"
+      const ok =
+        confirm(
+          user.name
+          +
+          " さんの利用を再開しますか？"
         );
 
 
-      document
-        .getElementById("weekBtn")
-        .classList
-        .toggle(
-          "active",
-          mode === "week"
+      if (!ok) {
+        return;
+      }
+
+
+      try {
+
+        await window.firebaseBridge.reactivateStaff(
+          userId
         );
 
 
-      /*
-        表示モードを切り替えた時も、
-        現在見ている内容に合わせて表示月をそろえます。
-      */
-      if (
-        mode === "single"
-      ) {
+        users[userId].active =
+          true;
 
-        scheduleMonth =
-          new Date(
-            selectedScheduleDate.getFullYear(),
-            selectedScheduleDate.getMonth(),
-            1
-          );
+
+        save(
+          "shiftAppUsers",
+          users
+        );
+
+
+        renderAdmin();
 
       }
 
-      else {
+      catch (error) {
 
-        /*
-          週表示へ切り替える時は、
-          現在の1日表示の日付が含まれる週を表示します。
-        */
-        scheduleMonth =
-          new Date(
-            selectedScheduleDate.getFullYear(),
-            selectedScheduleDate.getMonth(),
-            1
-          );
+        console.error(error);
 
-
-        weekStart =
-          getMonday(
-            selectedScheduleDate
-          );
+        alert(
+          "利用再開処理に失敗しました"
+        );
 
       }
-
-
-      updateAdminHeaderMonth();
-
-
-      renderSchedule();
 
     }
 
@@ -7638,8 +8049,6 @@
 
           if (
             data.role === "staff"
-            &&
-            data.active !== false
           ) {
 
             const staffId =
@@ -7649,7 +8058,9 @@
             remoteState.users[staffId] = {
               id: staffId,
               name: data.name,
-              uid: userDoc.id
+              uid: userDoc.id,
+              active:
+                data.active !== false
             };
 
 
@@ -7661,6 +8072,10 @@
               staffId;
 
 
+            /*
+              管理者は利用停止中スタッフの過去データも
+              Firebaseから保持できるよう、全員分を読み込みます。
+            */
             staffDocs.push({
               uid: userDoc.id,
               staffId: staffId
@@ -7722,7 +8137,8 @@
       remoteState.users[staffId] = {
         id: staffId,
         name: profile.name,
-        uid: uid
+        uid: uid,
+        active: true
       };
 
 
@@ -8320,6 +8736,18 @@
       object
     ) {
 
+      if (
+        window.setSyncStatus
+      ) {
+
+        window.setSyncStatus(
+          "saving",
+          "保存中…"
+        );
+
+      }
+
+
       pendingObjects[key] =
         JSON.parse(
           JSON.stringify(
@@ -8344,6 +8772,18 @@
                 pendingObjects[key]
               );
 
+
+              if (
+                window.setSyncStatus
+              ) {
+
+                window.setSyncStatus(
+                  "saved",
+                  "✓ 保存済み"
+                );
+
+              }
+
             }
 
             catch (error) {
@@ -8353,6 +8793,18 @@
                 key,
                 error
               );
+
+
+              if (
+                window.setSyncStatus
+              ) {
+
+                window.setSyncStatus(
+                  "error",
+                  "⚠ 保存できませんでした"
+                );
+
+              }
 
             }
 
@@ -8714,6 +9166,34 @@
     }
 
 
+    async function deleteStaffProfile(
+      staffId
+    ) {
+
+      const uid =
+        staffIdToUid[staffId];
+
+
+      if (!uid) {
+
+        throw new Error(
+          "スタッフUIDが見つかりません"
+        );
+
+      }
+
+
+      await deleteDoc(
+        doc(
+          db,
+          "users",
+          uid
+        )
+      );
+
+    }
+
+
     async function deactivateStaff(
       staffId
     ) {
@@ -8731,40 +9211,13 @@
       }
 
 
-      await resetUidData(uid);
-
-
       /*
-        users文書を削除すると、
-        Security Rules上「有効なスタッフ」ではなくなります。
+        Authenticationアカウントやシフトデータは消さず、
+        users/{uid} の active だけ false にします。
+
+        Security Rulesでは active:true のスタッフ本人だけ
+        データを読めるため、利用停止中はログインしても
+        シフトデータへアクセスできません。
       */
-      await deleteDoc(
+      await setDoc(
         doc(
-          db,
-          "users",
-          uid
-        )
-      );
-
-    }
-
-
-    /*
-      ============================================================
-      画面側から使う機能をwindowへ公開
-      ============================================================
-    */
-    window.firebaseBridge = {
-      staffLogin,
-      adminLogin,
-      logout,
-      createStaff,
-      queueSync,
-      resetStaffData,
-      deactivateStaff
-    };
-
-  </script>
-
-</body>
-</html>
